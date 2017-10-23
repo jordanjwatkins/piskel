@@ -3,11 +3,11 @@
   <div class="sticky-section left-sticky-section" id="tool-section">
 <div class="sticky-section-wrap">
   <div class="vertical-centerer">
-    <div class="pen-size-container" title="Pen size<br/>from 1 to 4 pixels" rel="tooltip" data-placement="top">
-      <div class="pen-size-option" data-size="1"></div>
-      <div class="pen-size-option" data-size="2"></div>
-      <div class="pen-size-option" data-size="3"></div>
-      <div class="pen-size-option" data-size="4"></div>
+    <div class="pen-size-container size-picker-container" title="Pen size<br/>from 1 to 4 pixels" rel="tooltip" data-placement="top">
+      <div class="pen-size-option size-picker-option" data-size="1"></div>
+      <div class="pen-size-option size-picker-option" data-size="2"></div>
+      <div class="pen-size-option size-picker-option" data-size="3"></div>
+      <div class="pen-size-option size-picker-option" data-size="4"></div>
     </div>
     <ul id="tools-container" class="tools-wrapper">
       <!-- Drawing tools will be inserted here -->
@@ -102,7 +102,7 @@
 <div class="toolbox-buttons">
   <button data-action="add"
     class="button layers-button piskel-icon-plus"
-    title="Create a new layer" rel="tooltip" data-placement="top" ></button>
+    rel="tooltip" data-placement="top" ></button>
 
   <button data-action="up"
     class="button layers-button piskel-icon-arrow-up-fat"
@@ -141,7 +141,14 @@
 </div>
 
       <div class="toolbox-container transformations-container">
-<h3 class="toolbox-title transformations-title">Transform</h3>
+<h3 class="toolbox-title transformations-title">
+  Transform
+  <span
+    class="transformations-show-more-link piskel-icon-plus"
+    title="View more tools"
+    rel="tooltip" data-placement="top"
+  ></span>
+</h3>
 <ul class="tools-wrapper"></ul>
 </div>
       <div class="toolbox-container palettes-list-container">
@@ -157,7 +164,10 @@
 </div>
 <div class="palettes-list-colors"></div>
 <script type="text/template" id="palette-color-template">
-  <div class="palettes-list-color" data-color="{{color}}" data-color-index="{{index}}" title="{{color}}">
+  <div class="palettes-list-color"
+       data-color="{{color}}"
+       data-color-index="{{index}}"
+       title="{{title}}">
     <div data-color="{{color}}" style="background:{{color}}"></div>
   </div>
 </script>
@@ -261,6 +271,77 @@
 </script>
 </div>
 <div style="display:none">
+<script type="text/template" id="data-uri-export-partial">
+  <style>
+    html, body {
+      margin: 0;
+    }
+
+    body {
+      background: #444;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: monospace;
+    }
+
+    #image-wrapper {
+      flex-grow: 1;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    img {
+      background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAABlBMVEXf39////8zI3BgAAAAHklEQVR4AWNghAIGCMDgjwgFCDDSw2M0PSCD0fQAACRcAgF4ciGUAAAAAElFTkSuQmCC') repeat;
+    }
+
+    #bottom-wrapper {
+      width: 600px;
+      height: 300px;
+      margin-top: 20px;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    textarea {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      padding: 10px;
+      border-style: none;
+
+      background: black;
+      color: gold;
+      font-family: monospace;
+    }
+
+    span {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      font-size: 12px;
+      padding: 5px;
+      color: white;
+      background-color: #444;
+    }
+  </style>
+  <body>
+    <div id="image-wrapper">
+      <img src="{{src}}" alt="Exported image as data-uri">
+    </div>
+    <div id="bottom-wrapper">
+      <textarea spellcheck="false" onclick="this.select()">{{src}}</textarea>
+      <span>Data-uri for the exported framesheet</span>
+    </div>
+  </body>
+</script>
+</div>
+
+<div style="display:none">
 <script type="text/template" id="popup-preview-partial">
   <style>
     body,
@@ -331,6 +412,159 @@
      rel="tooltip" data-placement="left" title="Performance problem detected, learn more.">&nbsp;</div>
 
 <!-- dialogs partials -->
+<script type="text/template" id="templates/dialogs/browse-backups.html">
+<div class="dialog-wrapper">
+  <h3 class="dialog-head">
+    Browse backups
+    <span class="dialog-close">X</span>
+  </h3>
+  <div class="dialog-content backups-wizard-container"></div>
+</div>
+</script>
+
+<script type="text/template" id="backups-select-session">
+<div class="backups-step-container">
+<div class="backups-step-content">
+  <div class="browse-backups-disclaimer">
+    <div class="backups-icon icon-common-backup-white">&nbsp;</div>
+    <div class="browse-backups-disclaimer-content">
+      <!-- Keep in sync with MAX_SESSIONS in BackupService.js -->
+      If you forgot to save your work or if Piskel crashed, try to restore one of the automatically backed up sessions below (up to 10 sessions).
+      <br/>
+      <br/>
+      Backups may be erased without notice, so try to save your work to a file or to your gallery as soon as you can.
+    </div>
+  </div>
+  <div class="session-list">
+  </div>
+</div>
+</div>
+</script>
+
+<script type="text/template" id="session-list-empty">
+<div class="session-list-empty">No session found ...</div>
+</script>
+
+<script type="text/template" id="session-list-item">
+<div class="session-item">
+<div class="session-details">
+  <span class="session-details-title">{{name}} {{description}}</span>
+  <span class="session-details-info">Session recorded {{date}}</span>
+  <span class="session-details-info">{{count}} saved</span>
+</div>
+<div class="session-actions">
+  <button class="button" data-session-id="{{id}}" data-action="delete">Delete</button>
+  <button class="button button-primary" data-session-id="{{id}}" data-action="view">View</button>
+</div>
+</div>
+</script>
+
+<script type="text/template" id="backups-session-details">
+<div class="backups-step-container">
+<div class="backups-step-content">
+  <div class="snapshot-list"></div>
+</div>
+<div class="backups-step-actions">
+  <button class="button back-button">back</button>
+</div>
+</div>
+</script>
+
+<script type="text/template" id="snapshot-list-empty">
+<div class="snapshot-list-empty">No snapshot found ...</div>
+</script>
+
+<script type="text/template" id="snapshot-list-item">
+<div class="snapshot-item" data-snapshot-id={{id}}>
+<div class="snapshot-preview lowcont-dark-picker-background"></div>
+<div class="snapshot-details">
+  <span class="snapshot-details-title">{{name}} {{description}}</span>
+  <span class="snapshot-details-info">Snapshot recorded {{date}}</span>
+  <span class="snapshot-details-info">{{frames}}, size {{resolution}}, {{fps}}fps</span>
+</div>
+<div class="snapshot-actions">
+  <button class="button button-primary" data-action="load" data-snapshot-id="{{id}}">Load</button>
+</div>
+</div>
+</script>
+<script type="text/template" id="templates/dialogs/browse-local.html">
+<div class="dialog-wrapper">
+  <h3 class="dialog-head">
+    Browse Local Piskels
+    <span class="dialog-close">X</span>
+  </h3>
+  <div class="dialog-content" style="padding:10px 20px; font-size:1.5em; overflow: auto;">
+    <table class="local-piskel-list">
+      <thead>
+        <tr class="local-piskel-list-head">
+          <td class="local-piskel-name">Name</td>
+          <td class="local-piskel-save-date">Date</td>
+          <td colspan=2>Actions</td>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+</script>
+
+<script type="text/template" id="local-storage-item-template">
+<tr class="local-piskel-item">
+  <td class="local-piskel-name">{{name}}</td>
+  <td class="local-piskel-save-date">{{date}}</td>
+  <td><button type="button" data-action="load" data-name="{{name}}" class="button button-primary local-piskel-load-button">Load</button></td>
+  <td><button type="button" data-action="delete" data-name="{{name}}" class="button local-piskel-delete-button">Delete</button></td>
+</tr>
+</script>
+<script type="text/template" id="templates/dialogs/cheatsheet.html">
+<div id="cheatsheetContainer" class="dialog-wrapper">
+  <h3 class="dialog-head">
+    <span class="dialog-title">Keyboard shortcuts</span>
+    <span class="dialog-close">X</span>
+  </h3>
+  <div class="cheatsheet-container dialog-content">
+    <div class="cheatsheet-section">
+      <h3 class="cheatsheet-title">Tool shortcuts</h3>
+      <ul class="cheatsheet-tool-shortcuts"></ul>
+    </div>
+    <div class="cheatsheet-section">
+      <h3 class="cheatsheet-title">Misc shortcuts</h3>
+      <ul class="cheatsheet-misc-shortcuts"></ul>
+    </div>
+    <div class="cheatsheet-boxes">
+      <div class="cheatsheet-section">
+        <h3 class="cheatsheet-title">Selection shortcuts</h3>
+        <ul class="cheatsheet-selection-shortcuts"></ul>
+      </div>
+      <div class="cheatsheet-section">
+        <h3 class="cheatsheet-title">Color shortcuts</h3>
+        <ul class="cheatsheet-color-shortcuts"></ul>
+      </div>
+      <div class="cheatsheet-section">
+        <h3 class="cheatsheet-title">Storage shortcuts</h3>
+        <ul class="cheatsheet-storage-shortcuts"></ul>
+      </div>
+    </div>
+  </div>
+  <div class="cheatsheet-actions">
+    <span class="cheatsheet-helptext" rel="tooltip" data-placement="top" title="!!!Set in CheatsheetController!!!"><b>Customize shortcuts ?</b></span>
+    <button type="button" name="cheatsheet-restore-defaults" data-action="restore-defaults" class="button cheatsheet-button cheatsheet-restore-defaults">Restore default shortcuts</button>
+  </div>
+
+  <!-- Event trap to capture keyboard remaps -->
+  <div style="position:relative; overflow:hidden; width:1px; height:1px;">
+    <input type="text" id="cheatsheetEventTrap" style="position:absolute; top:-1000px;" />
+  </div>
+</div>
+</script>
+
+<script type="text/template" id="cheatsheet-shortcut-template">
+<li class="cheatsheet-shortcut {{className}}" data-shortcut-id="{{id}}">
+  <div class="cheatsheet-icon {{icon}}"></div>
+  <span class="cheatsheet-key" rel="tooltip" data-placement="top" title="{{title}}">{{!key!}}</span>
+  <span class="cheatsheet-description">{{description}}</span>
+</li>
+</script>
 <script type="text/template" id="templates/dialogs/create-palette.html">
 <div class="dialog-wrapper">
   <h3 class="dialog-head">
@@ -415,84 +649,6 @@
   <div class="create-palette-remove-color">X</div>
 </li>
 </script>
-<script type="text/template" id="templates/dialogs/browse-local.html">
-<div class="dialog-wrapper">
-  <h3 class="dialog-head">
-    Browse Local Piskels
-    <span class="dialog-close">X</span>
-  </h3>
-  <div class="dialog-content" style="padding:10px 20px; font-size:1.5em; overflow: auto;">
-    <table class="local-piskel-list">
-      <thead>
-        <tr class="local-piskel-list-head">
-          <td class="local-piskel-name">Name</td>
-          <td class="local-piskel-save-date">Date</td>
-          <td colspan=2>Actions</td>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
-</div>
-</script>
-
-<script type="text/template" id="local-storage-item-template">
-<tr class="local-piskel-item">
-  <td class="local-piskel-name">{{name}}</td>
-  <td class="local-piskel-save-date">{{date}}</td>
-  <td><button type="button" data-action="load" data-name="{{name}}" class="button button-primary local-piskel-load-button">Load</button></td>
-  <td><button type="button" data-action="delete" data-name="{{name}}" class="button local-piskel-delete-button">Delete</button></td>
-</tr>
-</script>
-<script type="text/template" id="templates/dialogs/cheatsheet.html">
-<div id="cheatsheetContainer" class="dialog-wrapper">
-  <h3 class="dialog-head">
-    <span class="dialog-title">Keyboard shortcuts</span>
-    <span class="dialog-close">X</span>
-  </h3>
-  <div class="cheatsheet-container dialog-content">
-    <div class="cheatsheet-section">
-      <h3 class="cheatsheet-title">Tool shortcuts</h3>
-      <ul class="cheatsheet-tool-shortcuts"></ul>
-    </div>
-    <div class="cheatsheet-section">
-      <h3 class="cheatsheet-title">Misc shortcuts</h3>
-      <ul class="cheatsheet-misc-shortcuts"></ul>
-    </div>
-    <div class="cheatsheet-boxes">
-      <div class="cheatsheet-section">
-        <h3 class="cheatsheet-title">Selection shortcuts</h3>
-        <ul class="cheatsheet-selection-shortcuts"></ul>
-      </div>
-      <div class="cheatsheet-section">
-        <h3 class="cheatsheet-title">Color shortcuts</h3>
-        <ul class="cheatsheet-color-shortcuts"></ul>
-      </div>
-      <div class="cheatsheet-section">
-        <h3 class="cheatsheet-title">Storage shortcuts</h3>
-        <ul class="cheatsheet-storage-shortcuts"></ul>
-      </div>
-    </div>
-  </div>
-  <div class="cheatsheet-actions">
-    <span class="cheatsheet-helptext" rel="tooltip" data-placement="top" title="!!!Set in CheatsheetController!!!"><b>Customize shortcuts ?</b></span>
-    <button type="button" name="cheatsheet-restore-defaults" data-action="restore-defaults" class="button cheatsheet-button cheatsheet-restore-defaults">Restore default shortcuts</button>
-  </div>
-
-  <!-- Event trap to capture keyboard remaps -->
-  <div style="position:relative; overflow:hidden; width:1px; height:1px;">
-    <input type="text" id="cheatsheetEventTrap" style="position:absolute; top:-1000px;" />
-  </div>
-</div>
-</script>
-
-<script type="text/template" id="cheatsheet-shortcut-template">
-<li class="cheatsheet-shortcut {{className}}" data-shortcut-id="{{id}}">
-  <div class="cheatsheet-icon {{icon}}"></div>
-  <span class="cheatsheet-key" rel="tooltip" data-placement="top" title="{{title}}">{{!key!}}</span>
-  <span class="cheatsheet-description">{{description}}</span>
-</li>
-</script>
 <script type="text/template" id="templates/dialogs/import.html">
 <div class="dialog-wrapper">
   <h3 class="dialog-head">
@@ -562,11 +718,11 @@
   <div class="import-mode">
     <div class="import-mode-title">How do you want to import the new content?</div>
     <div class="import-mode-section">
-      <span class="import-mode-section-description">Combine the imported content and your existing sprite.</span>
-      <button class="import-mode-merge-button button-primary button">Merge</button>
+      <span class="import-mode-section-description">Combine with your sprite</span>
+      <button class="import-mode-merge-button button-primary button">Combine</button>
     </div>
     <div class="import-mode-section">
-      <span class="import-mode-section-description">Replace your current sprite by the imported content.</span>
+      <span class="import-mode-section-description">Replace your sprite</span>
       <button class="import-mode-replace-button button-primary button">Replace</button>
     </div>
   </div>
@@ -626,9 +782,6 @@
   The imported image is bigger than the current sprite.
 </div>
 <div class="import-resize-section">
-  <div class="import-resize-option-label">
-    How do you want to proceed?
-  </div>
   <label class="import-resize-option">
     <input type="radio" name="resize-mode" id="resize-option-expand" value="expand" {{expandChecked}}/>
     <span>Expand canvas to {{newSize}}</span>
@@ -657,35 +810,25 @@
 </div>
 
 <div class="import-step-content">
-  <div>Select a frame in your current sprite:</div>
+  <div>Select the insertion frame:</div>
   <div class="insert-frame-preview"></div>
   <div class="insert-mode-container">
     <div class="insert-mode-option-label">
-      How should the imported frames be inserted:
+      Insert imported frames:
     </div>
     <label class="insert-mode-option">
       <input type="radio" name="insert-mode" id="insert-mode-add" value="add" checked="checked"/>
-      <span>Add new frames</span>
+      <span>as new frames</span>
     </label>
     <label class="insert-mode-option">
       <input type="radio" name="insert-mode" id="insert-mode-insert" value="insert"/>
-      <span>Insert in existing frames</span>
+      <span>in existing frames</span>
     </label>
   </div>
   <div class="import-step-buttons">
     <button class="import-back-button button">back</button>
     <button class="import-next-button button button-primary">import</button>
   </div>
-</div>
-</div>
-</script>
-
-<script type="text/template" id="import-invalid-file">
-<div class="import-step-container">
-<div>THIS IS AN INVALID FILEZ</div>
-<div class="import-step-buttons">
-  <button class="import-back-button button">back</button>
-  <button class="import-next-button button button-primary">next</button>
 </div>
 </div>
 </script>
@@ -707,14 +850,14 @@
     <p>If you ignore this warning, please save often!</p>
     <p>To fix the issue, try adjusting your sprite settings:</p>
      <ul>
-      <li>sprite resolution <sup title="recommended: lower than 256x256, max: 512x512" rel="tooltip" data-placement="top">?</sup></li>
-      <li>number of layers <sup title="recommended: lower than 5, max: 20" rel="tooltip" data-placement="top">?</sup></li>
-      <li>number of frames <sup title="recommended: lower than 25, max: 100" rel="tooltip" data-placement="top">?</sup></li>
-      <li>number of colors <sup title="max: 100" rel="tooltip" data-placement="top">?</sup></li>
+      <li>sprite resolution <sup title="recommended: lower than 512x512" rel="tooltip" data-placement="top">?</sup></li>
+      <li>number of layers <sup title="recommended: less than 10" rel="tooltip" data-placement="top">?</sup></li>
+      <li>number of frames <sup title="recommended: less than 50" rel="tooltip" data-placement="top">?</sup></li>
+      <li>number of colors <sup title="recommended: less than 256" rel="tooltip" data-placement="top">?</sup></li>
     </ul>
     <p>We strive to improve Piskel, its performance and stability, but this is a personal project with limited time and resources.
        We prefer to warn you early rather than having you lose your work.</p>
-    <p>Feedback welcome at <a href="https://github.com/juliandescottes/piskel" target="_blank">https://github.com/juliandescottes/piskel</a></p>
+    <p>Feedback welcome at <a href="https://github.com/piskelapp/piskel" target="_blank">https://github.com/piskelapp/piskel</a></p>
     <p>
       <div class="warning-icon icon-common-warning-red">&nbsp;</div>
       <div class="warning-icon-info">This icon will remain on the bottom-right of the application until the performance issue is fixed. You can click on it at anytime to display this information again.</div>
@@ -742,79 +885,117 @@
 </script>
 
 <!-- settings-panel partials -->
-<script type="text/html" id="templates/settings/application.html">
-<form action="" method="POST" name="application-settings-form">
-  <div class="settings-section settings-section-application">
-    <div class="settings-title">
-      General
-    </div>
-
-    <div class="settings-item">
-      <label>Background</label>
-      <div class="background-picker-wrapper">
-        <div class="background-picker light-picker-background" data-background="light-canvas-background"
-              rel="tooltip" data-placement="bottom" title="light / high contrast">
-        </div>
-        <div class="background-picker medium-picker-background" data-background="medium-canvas-background"
-              rel="tooltip" data-placement="bottom" title="medium / high contrast">
-        </div>
-        <div class="background-picker lowcont-medium-picker-background" data-background="lowcont-medium-canvas-background"
-              rel="tooltip" data-placement="bottom" title="medium / low contrast">
-        </div>
-        <div class="background-picker lowcont-dark-picker-background" data-background="lowcont-dark-canvas-background"
-              rel="tooltip" data-placement="bottom" title="dark / low contrast">
-        </div>
-      </div>
-    </div>
-
-    <div class="settings-item">
-      <label for="grid-width">Pixel grid</label>
-      <select id="grid-width" class="grid-width-select">
-        <option value="0">Disabled</option>
-        <option value="1">1px</option>
-        <option value="2">2px</option>
-        <option value="3">3px</option>
-        <option value="4">4px</option>
-      </select>
-    </div>
-
-    <div class="settings-item">
-      <label>Layer opacity</label>
-      <input type="range" class="settings-opacity-input layer-opacity-input" name="layer-opacity" min="0"  max="1" step="0.05"/>
-      <span class="settings-opacity-text layer-opacity-text"></span>
-    </div>
-
-    <div class="settings-item">
-      <label>
-        Seamless drawing mode
-        <input type="checkbox" value="1" class="seamless-mode-checkbox" name="seamless-mode-checkbox"/>
-      </label>
-    </div>
-
-    <div class="settings-item">
-      <label>Seamless opacity</label>
-      <input type="range" class="settings-opacity-input seamless-opacity-input" name="seamless-opacity" min="0"  max="0.5" step="0.01"/>
-      <span class="settings-opacity-text seamless-opacity-text"></span>
-    </div>
-
-    <div class="settings-item">
-      <label>Maximum FPS</label>
-      <input type="text" class="textfield  textfield-small  max-fps-input" autocomplete="off" name="max-fps"/>
-    </div>
-
-    <div class="settings-item">
-      <label for="color-format">Color format</label>
-      <select id="color-format" class="color-format-select">
-        <option value="hex">Hex</option>
-        <option value="rgb">RGB</option>
-      </select>
-    </div>
-
-    <input type="submit" class="button button-primary" value="Apply settings" />
+<script type="text/html" id="templates/settings/preferences.html">
+<div class="settings-section settings-section-preferences">
+  <div class="settings-title">Settings</div>
+  <div class="tab-list">
+    <div class="tab-item" data-tab-id="misc">Misc</div>
+    <div class="tab-item" data-tab-id="grid">Grid</div>
+    <div class="tab-item" data-tab-id="tile">Tile mode</div>
   </div>
-</form>
+  <div class="tab-content"></div>
+  <div class="settings-version-info">
+    Piskel
+    <span rel="tooltip" data-placement="bottom" title="View release notes">
+      <a  class="settings-version" target="_blank"
+          href="https://github.com/piskelapp/piskel/releases/tag/v0.12.1">v0.12.1</a>
+    </span>
+  </div>
+</div>
+
 </script>
 
+<script type="text/html" id="templates/settings/preferences/grid.html">
+<div class="preferences-panel-grid">
+  <div class="settings-item">
+    <label>
+      Enable grid
+      <input type="checkbox" value="1" class="enable-grid-checkbox" name="enable-grid-checkbox"/>
+    </label>
+  </div>
+  <div class="settings-item settings-item-grid-size">
+    <label>Grid size</label>
+    <div class="grid-size-container size-picker-container">
+      <div class="size-picker-option"
+        title="1px" rel="tooltip" data-placement="top" data-size="1"></div>
+      <div class="size-picker-option"
+        title="2px" rel="tooltip" data-placement="top" data-size="2"></div>
+      <div class="size-picker-option"
+        title="3px" rel="tooltip" data-placement="top" data-size="3"></div>
+      <div class="size-picker-option"
+        title="4px" rel="tooltip" data-placement="top" data-size="4"></div>
+    </div>
+  </div>
+  <div class="settings-item settings-item-grid-color">
+    <label>Grid color</label>
+    <div class="grid-colors-list"></div>
+    <script type="text/template" id="color-list-item-template">
+      <div class="grid-colors-item {{:selected}}"
+           data-color="{{color}}"
+           style="background:{{background}}"
+           title="{{title}}">
+      </div>
+    </script>
+  </div>
+</div>
+</script>
+<script type="text/html" id="templates/settings/preferences/misc.html">
+<div class="preferences-panel-misc">
+  <div class="settings-item">
+    <label>Background</label>
+    <div class="background-picker-wrapper">
+      <div class="background-picker light-picker-background" data-background="light-canvas-background"
+            rel="tooltip" data-placement="bottom" title="light / high contrast">
+      </div>
+      <div class="background-picker medium-picker-background" data-background="medium-canvas-background"
+            rel="tooltip" data-placement="bottom" title="medium / high contrast">
+      </div>
+      <div class="background-picker lowcont-medium-picker-background" data-background="lowcont-medium-canvas-background"
+            rel="tooltip" data-placement="bottom" title="medium / low contrast">
+      </div>
+      <div class="background-picker lowcont-dark-picker-background" data-background="lowcont-dark-canvas-background"
+            rel="tooltip" data-placement="bottom" title="dark / low contrast">
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-item">
+    <label>Layer opacity</label>
+    <input type="range" class="settings-opacity-input layer-opacity-input" name="layer-opacity" min="0"  max="1" step="0.05"/>
+    <span class="settings-opacity-text layer-opacity-text"></span>
+  </div>
+
+  <div class="settings-item">
+    <label>Maximum FPS</label>
+    <input type="text" class="textfield  textfield-small  max-fps-input" autocomplete="off" name="max-fps"/>
+  </div>
+
+  <div class="settings-item">
+    <label for="color-format">Color format</label>
+    <select id="color-format" class="color-format-select">
+      <option value="hex">Hex</option>
+      <option value="rgb">RGB</option>
+    </select>
+  </div>
+</div>
+</script>
+<script type="text/html" id="templates/settings/preferences/tile.html">
+<div class="preferences-panel-tile">
+  <div class="settings-item">
+    <label>
+      Enable tile mode
+      <input type="checkbox" value="1" class="tile-mode-checkbox" name="tile-mode-checkbox"/>
+    </label>
+  </div>
+
+  <div class="settings-item">
+    <label>Mask opacity</label>
+    <input type="range" min="0" max="0.5" step="0.01"
+      class="settings-opacity-input tile-mask-opacity-input" name="tile-mask-opacity"/>
+    <span class="settings-opacity-text tile-mask-opacity-text"></span>
+  </div>
+</div>
+</script>
 <script type="text/html" id="templates/settings/resize.html">
 <div class="settings-section settings-section-resize">
   <!-- RESIZE DRAWING SECTION -->
@@ -915,7 +1096,7 @@
 <script type="text/template" id="save-gallery-unavailable-partial">
 <div class="settings-title">Save online</div>
 <div class="settings-item">
-  <div class="save-status">Login to <a href="http://piskelapp.com" target="_blank">piskelapp.com</a> to save and share your sprites online.</div>
+  <div class="save-status">Login to <a href="https://www.piskelapp.com" target="_blank">piskelapp.com</a> to save and share your sprites online.</div>
 </div>
 </script>
 
@@ -986,16 +1167,11 @@
   <div class="settings-title">
     Recover recent sessions
   </div>
-  <div class="settings-item previous-session">
-  </div>
-</div>
-</script>
-
-<script type="text/template" id="previous-session-info-template">
-<div>
-  Restore a backup of <span class="highlight">{{name}}</span>, saved at <span style="color:white">{{date}}</span> ?
-  <div style="margin-top:10px;">
-    <button type="button" class="button  button-primary restore-session-button">Restore</button>
+  <div class="settings-item">
+    Browse backups of previous sessions.
+    <div style="margin-top:10px;">
+      <button type="button" class="button button-primary browse-backups-button">Browse backups</button>
+    </div>
   </div>
 </div>
 </script>
@@ -1015,13 +1191,13 @@
     <div class="resize-label">x</div>
     <input type="text" class="textfield  resize-field  resize-height" autocomplete="off" name="resize-height"/>
   </div>
-  <div class="export-tabs">
-    <div class="export-tab" data-tab-id="gif">GIF</div>
-    <div class="export-tab" data-tab-id="png">PNG</div>
-    <div class="export-tab" data-tab-id="zip">Zip</div>
-    <div class="export-tab" data-tab-id="misc">Others</div>
+  <div class="export-tabs tab-list">
+    <div class="export-tab tab-item" data-tab-id="gif">GIF</div>
+    <div class="export-tab tab-item" data-tab-id="png">PNG</div>
+    <div class="export-tab tab-item" data-tab-id="zip">Zip</div>
+    <div class="export-tab tab-item" data-tab-id="misc">Others</div>
   </div>
-  <div class="export-panel"></div>
+  <div class="export-panel tab-content"></div>
 </div>
 </script>
 
@@ -1067,7 +1243,17 @@
 <script type="text/html" id="templates/settings/export/gif.html">
 <div class="export-panel-gif">
   <div class="export-panel-header export-info">
-    Convert your sprite to an animated GIF. Opacity will not be preserved. Colors might be resampled.
+    Convert your sprite to an animated GIF.
+  </div>
+  <div class="gif-export-warning">
+    <div class="gif-export-warning-icon icon-common-warning-red">&nbsp;</div>
+    <div class="gif-export-warning-message">
+      Too many colors: can not preserve original colors or transparency.
+    </div>
+  </div>
+  <div class="export-panel-section export-panel-row">
+    <input id="gif-repeat-checkbox" class="gif-repeat-checkbox checkbox-fix" type="checkbox" />
+    <label for="gif-repeat-checkbox">Loop repeatedly</label>
   </div>
   <div class="export-panel-section export-panel-row">
     <button type="button" class="button button-primary gif-download-button">Download</button>
@@ -1130,9 +1316,9 @@
   (function () {
 
 /**
- * See @Gruntfile.js => after build, -2017-05-10-01-32 is replaced by the build version
+ * See @Gruntfile.js => after build, -2017-10-21-02-28 is replaced by the build version
  */
-var version = '-2017-05-10-01-32';
+var version = '-2017-10-21-02-28';
 var versionHasNotBeenReplaced = version.indexOf('@@') === 0;
 if (versionHasNotBeenReplaced)  {
   version = '';
@@ -1147,6 +1333,7 @@ window._onPiskelReady = function () {
   loadingMask.style.opacity = 0;
   window.setTimeout(function () {loadingMask.parentNode.removeChild(loadingMask);}, 600);
   pskl.app.init();
+  pskl._releaseVersion = '0.12.1';
   // cleanup
   delete window.pskl_exports;
   delete window.loadDebugScripts;
@@ -1196,12 +1383,21 @@ if (window.location.href.indexOf('debug') != -1) {
   };
   loadScript('piskel-script-list.js', 'loadNextScript()');
 
+  var styles;
   window.loadStyles = function () {
-    var styles = window.pskl_exports.styles;
+    styles = window.pskl_exports.styles;
     for (var i = 0 ; i < styles.length ; i++) {
       loadStyle(styles[i]);
     }
   };
+
+  window.reloadStyles = function () {
+    for (var i = 0 ; i < styles.length ; i++) {
+      document.querySelector('link[href="' + styles[i] + '"]').remove();
+      loadStyle(styles[i]);
+    }
+  };
+
   loadScript('piskel-style-list.js', 'loadStyles()');
 } else {
   var script;
