@@ -520,7 +520,11 @@
 </script>
 
 <script type="text/template" id="session-list-empty">
-<div class="session-list-empty">No session found ...</div>
+<div class="centered-message session-list-empty">No session found ...</div>
+</script>
+
+<script type="text/template" id="session-list-error">
+<div class="centered-message session-list-error">Could not load backup sessions, something went wrong.</div>
 </script>
 
 <script type="text/template" id="session-list-item">
@@ -549,7 +553,11 @@
 </script>
 
 <script type="text/template" id="snapshot-list-empty">
-<div class="snapshot-list-empty">No snapshot found ...</div>
+<div class="centered-message snapshot-list-empty">No snapshot found ...</div>
+</script>
+
+<script type="text/template" id="snapshot-list-error">
+<div class="centered-message snapshot-list-error">Could not load snapshots, something went wrong.</div>
 </script>
 
 <script type="text/template" id="snapshot-list-item">
@@ -754,8 +762,8 @@
     </div>
     <div class="import-section import-subsection">
       <span class="dialog-section-title">Resize to</span>
-      <input type="text" class="textfield import-size-field" name="resize-width"/>x
-      <input type="text" class="textfield import-size-field" name="resize-height"/>
+      <input type="text" class="textfield import-size-field" autocomplete="off" name="resize-width"/>x
+      <input type="text" class="textfield import-size-field" autocomplete="off" name="resize-height"/>
     </div>
     <div class="import-section import-subsection">
       <span class="import-section-title">Smooth resize</span>
@@ -769,13 +777,13 @@
     </div>
     <div class="import-section import-subsection">
       <span class="dialog-section-title">Frame size</span>
-      <input type="text" class="textfield import-size-field" name="frame-size-x"/>x
-      <input type="text" class="textfield import-size-field" name="frame-size-y"/>
+      <input type="text" class="textfield import-size-field" autocomplete="off" name="frame-size-x"/>x
+      <input type="text" class="textfield import-size-field" autocomplete="off" name="frame-size-y"/>
     </div>
     <div class="import-section import-subsection">
       <span class="dialog-section-title">Offset</span>
-      <input type="text" class="textfield import-size-field" name="frame-offset-x"/>x
-      <input type="text" class="textfield import-size-field" name="frame-offset-y"/>
+      <input type="text" class="textfield import-size-field" autocomplete="off" name="frame-offset-x"/>x
+      <input type="text" class="textfield import-size-field" autocomplete="off" name="frame-offset-y"/>
     </div>
   </form>
   <div class="import-step-buttons">
@@ -976,7 +984,7 @@
       Piskel
       <span rel="tooltip" data-placement="bottom" title="View release notes">
         <a  class="settings-version" target="_blank"
-            href="https://github.com/piskelapp/piskel/releases/tag/v0.12.1">v0.12.1</a>
+            href="https://github.com/piskelapp/piskel/releases/tag/v0.13.0">v0.13.0</a>
       </span>
     </div>
   </div>
@@ -1004,6 +1012,25 @@
           title="4px" rel="tooltip" data-placement="top" data-size="4"></div>
       </div>
     </div>
+    <div class="settings-item settings-item-grid-spacing">
+      <label>Grid Spacing</label>
+      <div class="grid-spacing-container spacing-picker-container">
+        <div class="size-picker-option"
+          title="1px" rel="tooltip" data-placement="top" data-size="1"></div>
+        <div class="size-picker-option"
+          title="2px" rel="tooltip" data-placement="top" data-size="2"></div>
+        <div class="size-picker-option"
+          title="4px" rel="tooltip" data-placement="top" data-size="4"></div>
+        <div class="size-picker-option"
+          title="8px" rel="tooltip" data-placement="top" data-size="8"></div>
+        <div class="size-picker-option"
+          title="16px" rel="tooltip" data-placement="top" data-size="16"></div>
+        <div class="size-picker-option"
+          title="32px" rel="tooltip" data-placement="top" data-size="32"></div>
+        <div class="size-picker-option"
+          title="64px" rel="tooltip" data-placement="top" data-size="64"></div>
+      </div>
+    </div>
     <div class="settings-item settings-item-grid-color">
       <label>Grid color</label>
       <div class="grid-colors-list"></div>
@@ -1017,6 +1044,7 @@
     </div>
   </div>
 </script>
+
   <script type="text/html" id="templates/settings/preferences/misc.html">
   <div class="preferences-panel-misc">
     <div class="settings-item">
@@ -1093,13 +1121,13 @@
           <span>px</span>
         </div>
         <div class="resize-section">
-          <label>
+          <label class="checkbox-container">
             <input type="checkbox" class="resize-ratio-checkbox checkbox-fix" value="true"/>
             <span>Maintain aspect ratio</span>
           </label>
         </div>
         <div class="resize-section">
-          <label>
+          <label class="checkbox-container">
             <input type="checkbox" class="resize-content-checkbox checkbox-fix" value="true"/>
             <span>Resize canvas content</span>
           </label>
@@ -1308,6 +1336,10 @@
       <div style="padding-bottom: 5px">
         <span class="highlight export-panel-row">Export for PixiJS Movie: </span>
       </div>
+      <div class="checkbox-container" style="margin: 5px 0;">
+        <input id="png-pixi-inline-image" class="png-pixi-inline-image-checkbox checkbox-fix" type="checkbox" />
+        <label for="png-pixi-inline-image">Inline spritesheet as data-uri</label>
+      </div>
       <div class="export-panel-row">
         <button type="button" class="button button-primary png-pixi-download-button"/>Download</button>
         <span class="png-export-dimension-info export-info">Spritesheet with JSON metadata</span>
@@ -1331,7 +1363,10 @@
     </div>
     <div class="export-panel-section export-panel-row">
       <input id="gif-repeat-checkbox" class="gif-repeat-checkbox checkbox-fix" type="checkbox" />
-      <label for="gif-repeat-checkbox">Loop repeatedly</label>
+      <label for="gif-repeat-checkbox"
+             title="Uncheck to play the animation only one time."
+             rel="tooltip"
+             data-placement="top">Loop repeatedly</label>
     </div>
     <div class="export-panel-section export-panel-row">
       <button type="button" class="button button-primary gif-download-button">Download</button>
@@ -1356,7 +1391,7 @@
         <input type="text" style="flex: 1;" class="zip-prefix-name textfield"
                autocomplete="off" placeholder="PNG file prefix ...">
       </div>
-      <div style="margin: 5px 0;">
+      <div class="checkbox-container" style="margin: 5px 0;">
         <input id="zip-split-layers" class="zip-split-layers-checkbox checkbox-fix" type="checkbox" />
         <label for="zip-split-layers">Split by layers</label>
       </div>
@@ -1394,9 +1429,9 @@
     (function () {
 
   /**
-   * See @Gruntfile.js => after build, -2017-10-21-02-28 is replaced by the build version
+   * See @Gruntfile.js => after build, -2018-10-17-10-26 is replaced by the build version
    */
-  var version = '-2017-10-21-02-28';
+  var version = '-2018-10-17-10-26';
   var versionHasNotBeenReplaced = version.indexOf('@@') === 0;
   if (versionHasNotBeenReplaced)  {
     version = '';
@@ -1411,7 +1446,7 @@
     loadingMask.style.opacity = 0;
     window.setTimeout(function () {loadingMask.parentNode.removeChild(loadingMask);}, 600);
     pskl.app.init();
-    pskl._releaseVersion = '0.12.1';
+    pskl._releaseVersion = '0.13.0';
     // cleanup
     delete window.pskl_exports;
     delete window.loadDebugScripts;

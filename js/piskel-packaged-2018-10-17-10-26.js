@@ -14018,6 +14018,7 @@ if (!Uint32Array.prototype.fill) {
     GRID_COLOR : 'GRID_COLOR',
     GRID_ENABLED : 'GRID_ENABLED',
     GRID_WIDTH : 'GRID_WIDTH',
+    GRID_SPACING : 'GRID_SPACING',
     MAX_FPS : 'MAX_FPS',
     DEFAULT_SIZE : 'DEFAULT_SIZE',
     CANVAS_BACKGROUND : 'CANVAS_BACKGROUND',
@@ -14040,6 +14041,7 @@ if (!Uint32Array.prototype.fill) {
       'GRID_COLOR' : Constants.TRANSPARENT_COLOR,
       'GRID_ENABLED' : false,
       'GRID_WIDTH' : 1,
+      'GRID_SPACING' : 1,
       'MAX_FPS' : 24,
       'DEFAULT_SIZE' : {
         width : Constants.DEFAULT.WIDTH,
@@ -20766,9 +20768,7 @@ return Q;
     return _requestPromise(request).then(function (event) {
       this.db = event.target.result;
       return this.db;
-    }.bind(this)).catch(function (e) {
-      console.log('Failed to initialize IndexedDB, local browser saves will be unavailable.');
-    });
+    }.bind(this));
   };
 
   ns.PiskelDatabase.prototype.onUpgradeNeeded_ = function (event) {
@@ -21561,6 +21561,7 @@ return Q;
     this.setDisplaySize(renderingOptions.width, renderingOptions.height);
 
     this.setGridWidth(this.getUserGridWidth_());
+    this.setGridSpacing(this.getUserGridSpacing_());
 
     $.subscribe(Events.USER_SETTINGS_CHANGED, this.onUserSettingsChange_.bind(this));
   };
@@ -21651,6 +21652,10 @@ return Q;
     this.gridWidth_ = value;
   };
 
+  ns.FrameRenderer.prototype.setGridSpacing = function (value) {
+    this.gridSpacing_ = value;
+  };
+
   ns.FrameRenderer.prototype.getGridWidth = function () {
     if (!this.supportGridRendering) {
       return 0;
@@ -21659,15 +21664,29 @@ return Q;
     return this.gridWidth_;
   };
 
+  ns.FrameRenderer.prototype.getGridSpacing = function () {
+    if (!this.supportGridRendering) {
+      return 0;
+    }
+
+    return this.gridSpacing_;
+  };
+
   /**
    * Compute a grid width value best suited to the current display context,
    * particularly for the current zoom level
    */
   ns.FrameRenderer.prototype.computeGridWidthForDisplay_ = function () {
+    var gridSpacing = this.getGridSpacing();
+    if (this.zoom * gridSpacing < 6) {
+      return 0;
+    }
+
     var gridWidth = this.getGridWidth();
-    while (this.zoom < 6 * gridWidth) {
+    while (gridWidth > 1 && this.zoom < 6 * gridWidth) {
       gridWidth--;
     }
+
     return gridWidth;
   };
 
@@ -21690,8 +21709,11 @@ return Q;
 
   ns.FrameRenderer.prototype.onUserSettingsChange_ = function (evt, settingName, settingValue) {
     var settings = pskl.UserSettings;
-    if (settingName == settings.GRID_WIDTH || settingName == settings.GRID_ENABLED) {
+    if (settingName == settings.GRID_WIDTH ||
+        settingName == settings.GRID_SPACING ||
+        settingName == settings.GRID_ENABLED) {
       this.setGridWidth(this.getUserGridWidth_());
+      this.setGridSpacing(this.getUserGridSpacing_());
     }
   };
 
@@ -21699,6 +21721,12 @@ return Q;
     var gridEnabled = pskl.UserSettings.get(pskl.UserSettings.GRID_ENABLED);
     var width = pskl.UserSettings.get(pskl.UserSettings.GRID_WIDTH);
     return gridEnabled ? width : 0;
+  };
+
+  ns.FrameRenderer.prototype.getUserGridSpacing_ = function () {
+    var gridEnabled = pskl.UserSettings.get(pskl.UserSettings.GRID_ENABLED);
+    var spacing = pskl.UserSettings.get(pskl.UserSettings.GRID_SPACING);
+    return gridEnabled ? spacing : 0;
   };
 
   /**
@@ -21803,12 +21831,14 @@ return Q;
 
     // Draw grid.
     var gridWidth = this.computeGridWidthForDisplay_();
+    var gridSpacing = this.getGridSpacing();
     if (gridWidth > 0) {
       var gridColor = this.getGridColor();
       // Scale out before drawing the grid.
       displayContext.scale(1 / z, 1 / z);
 
       var drawOrClear;
+      var drawing = true;
       if (gridColor === Constants.TRANSPARENT_COLOR) {
         drawOrClear = displayContext.clearRect.bind(displayContext);
       } else {
@@ -21818,11 +21848,15 @@ return Q;
 
       // Draw or clear vertical lines.
       for (var i = 1 ; i < frame.getWidth() ; i++) {
-        drawOrClear((i * z) - (gridWidth / 2), 0, gridWidth, h * z);
+        if (i % gridSpacing == 0) {
+          drawOrClear((i * z) - (gridWidth / 2), 0, gridWidth, h * z);
+        }
       }
       // Draw or clear horizontal lines.
       for (var j = 1 ; j < frame.getHeight() ; j++) {
-        drawOrClear(0, (j * z) - (gridWidth / 2), w * z, gridWidth);
+        if (j % gridSpacing == 0) {
+          drawOrClear(0, (j * z) - (gridWidth / 2), w * z, gridWidth);
+        }
       }
     }
 
@@ -22026,6 +22060,7 @@ return Q;
     var serializedFrame = [
       this.getZoom(),
       this.getGridWidth(),
+      this.getGridSpacing(),
       this.getGridColor(),
       pskl.UserSettings.get('SEAMLESS_MODE'),
       pskl.UserSettings.get('SEAMLESS_OPACITY'),
@@ -25235,6 +25270,7 @@ return Q;
     this.piskelController = piskelController;
     this.preferencesController = preferencesController;
     this.sizePicker = new pskl.widgets.SizePicker(this.onSizePickerChanged_.bind(this));
+    this.spacingPicker = new pskl.widgets.SizePicker(this.onSpacingPickerChanged_.bind(this));
   };
 
   pskl.utils.inherit(ns.GridPreferencesController, pskl.controller.settings.AbstractSettingController);
@@ -25252,6 +25288,11 @@ return Q;
     var gridWidth = pskl.UserSettings.get(pskl.UserSettings.GRID_WIDTH);
     this.sizePicker.init(document.querySelector('.grid-size-container'));
     this.sizePicker.setSize(gridWidth);
+
+    //Grid Spacing
+    var gridSpacing = pskl.UserSettings.get(pskl.UserSettings.GRID_SPACING);
+    this.spacingPicker.init(document.querySelector('.grid-spacing-container'));
+    this.spacingPicker.setSize(gridSpacing);
 
     // Grid color
     var colorListItemTemplate = pskl.utils.Template.get('color-list-item-template');
@@ -25281,11 +25322,16 @@ return Q;
 
   ns.GridPreferencesController.prototype.destroy = function () {
     this.sizePicker.destroy();
+    this.spacingPicker.destroy();
     this.superclass.destroy.call(this);
   };
 
   ns.GridPreferencesController.prototype.onSizePickerChanged_ = function (size) {
     pskl.UserSettings.set(pskl.UserSettings.GRID_WIDTH, size);
+  };
+
+  ns.GridPreferencesController.prototype.onSpacingPickerChanged_ = function (size) {
+    pskl.UserSettings.set(pskl.UserSettings.GRID_SPACING, size);
   };
 
   ns.GridPreferencesController.prototype.onEnableGridChange_ = function (evt) {
@@ -25586,7 +25632,7 @@ return Q;
       width: width * zoom,
       height: height * zoom,
       preserveColors : preserveColors,
-      repeat: this.getRepeatSetting_() ? 0 : 1,
+      repeat: this.getRepeatSetting_() ? 0 : -1,
       transparent : transparent
     });
 
@@ -25696,6 +25742,8 @@ return Q;
     var downloadButton = document.querySelector('.png-download-button');
     var downloadPixiButton = document.querySelector('.png-pixi-download-button');
     var dataUriButton = document.querySelector('.datauri-open-button');
+
+    this.pixiInlineImageCheckbox = document.querySelector('.png-pixi-inline-image-checkbox');
 
     this.initLayoutSection_();
     this.updateDimensionLabel_();
@@ -25832,7 +25880,15 @@ return Q;
     var canvas = this.createPngSpritesheet_();
     var name = this.piskelController.getPiskel().getDescriptor().name;
 
-    zip.file(name + '.png', pskl.utils.CanvasUtils.getBase64FromCanvas(canvas) + '\n', {base64: true});
+    var image;
+
+    if (this.pixiInlineImageCheckbox.checked) {
+      image = canvas.toDataURL('image/png');
+    } else {
+      image = name + '.png';
+
+      zip.file(image, pskl.utils.CanvasUtils.getBase64FromCanvas(canvas) + '\n', {base64: true});
+    }
 
     var width = canvas.width / this.getColumns_();
     var height = canvas.height / this.getRows_();
@@ -25857,7 +25913,7 @@ return Q;
       'meta': {
         'app': 'https://github.com/piskelapp/piskel/',
         'version': '1.0',
-        'image': name + '.png',
+        'image': image,
         'format': 'RGBA8888',
         'size': {'w': canvas.width,'h': canvas.height}
       }
@@ -27160,29 +27216,34 @@ return Q;
 
   ns.SelectSession.prototype.update = function () {
     pskl.app.backupService.list().then(function (sessions) {
-      var html = '';
-      if (sessions.length === 0) {
-        html = pskl.utils.Template.get('session-list-empty');
-      } else {
-        var sessionItemTemplate = pskl.utils.Template.get('session-list-item');
-        var html = '';
-        sessions.forEach(function (session) {
-          if (session.id === pskl.app.sessionId) {
-            // Do not show backups for the current session.
-            return;
-          }
-          var view = {
-            id: session.id,
-            name: session.name,
-            description: session.description ? '- ' + session.description : '',
-            date: pskl.utils.DateUtils.format(session.endDate, 'the {{Y}}/{{M}}/{{D}} at {{H}}:{{m}}'),
-            count: session.count === 1 ? '1 snapshot' : session.count + ' snapshots'
-          };
-          html += pskl.utils.Template.replace(sessionItemTemplate, view);
-        });
-      }
+      var html = this.getMarkupForSessions_(sessions);
+      this.container.querySelector('.session-list').innerHTML = html;
+    }.bind(this)).catch(function () {
+      var html = pskl.utils.Template.get('session-list-error');
       this.container.querySelector('.session-list').innerHTML = html;
     }.bind(this));
+  };
+
+  ns.SelectSession.prototype.getMarkupForSessions_ = function (sessions) {
+    if (sessions.length === 0) {
+      return pskl.utils.Template.get('session-list-empty');
+    }
+
+    var sessionItemTemplate = pskl.utils.Template.get('session-list-item');
+    return sessions.reduce(function (previous, session) {
+      if (session.id === pskl.app.sessionId) {
+        // Do not show backups for the current session.
+        return previous;
+      }
+      var view = {
+        id: session.id,
+        name: session.name,
+        description: session.description ? '- ' + session.description : '',
+        date: pskl.utils.DateUtils.format(session.endDate, 'the {{Y}}/{{M}}/{{D}} at {{H}}:{{m}}'),
+        count: session.count === 1 ? '1 snapshot' : session.count + ' snapshots'
+      };
+      return previous + pskl.utils.Template.replace(sessionItemTemplate, view);
+    }, '');
   };
 
   ns.SelectSession.prototype.destroy = function () {
@@ -27244,31 +27305,40 @@ return Q;
   ns.SessionDetails.prototype.onShow = function () {
     var sessionId = this.backupsController.backupsData.selectedSession;
     pskl.app.backupService.getSnapshotsBySessionId(sessionId).then(function (snapshots) {
-      var html = '';
-      if (snapshots.length === 0) {
-        // This should normally never happen, all sessions have at least one snapshot and snapshots
-        // can not be individually deleted.
-        console.warn('Could not retrieve snapshots for a session');
-        html = pskl.utils.Template.get('snapshot-list-empty');
-      } else {
-        var sessionItemTemplate = pskl.utils.Template.get('snapshot-list-item');
-        var html = '';
-        snapshots.forEach(function (snapshot) {
-          var view = {
-            id: snapshot.id,
-            name: snapshot.name,
-            description: snapshot.description ? '- ' + snapshot.description : '',
-            date: pskl.utils.DateUtils.format(snapshot.date, 'the {{Y}}/{{M}}/{{D}} at {{H}}:{{m}}'),
-            frames: snapshot.frames === 1 ? '1 frame' : snapshot.frames + ' frames',
-            resolution: pskl.utils.StringUtils.formatSize(snapshot.width, snapshot.height),
-            fps: snapshot.fps
-          };
-          html += pskl.utils.Template.replace(sessionItemTemplate, view);
-          this.updateSnapshotPreview_(snapshot);
-        }.bind(this));
-      }
+      var html = this.getMarkupForSnapshots_(snapshots);
+      this.container.querySelector('.snapshot-list').innerHTML = html;
+
+      // Load the image of the first frame for each sprite and update the list.
+      snapshots.forEach(function (snapshot) {
+        this.updateSnapshotPreview_(snapshot);
+      }.bind(this));
+    }.bind(this)).catch(function () {
+      var html = pskl.utils.Template.get('snapshot-list-error');
       this.container.querySelector('.snapshot-list').innerHTML = html;
     }.bind(this));
+  };
+
+  ns.SessionDetails.prototype.getMarkupForSnapshots_ = function (snapshots) {
+    if (snapshots.length === 0) {
+      // This should normally never happen, all sessions have at least one snapshot and snapshots
+      // can not be individually deleted.
+      console.warn('Could not retrieve snapshots for a session');
+      return pskl.utils.Template.get('snapshot-list-empty');
+    }
+
+    var sessionItemTemplate = pskl.utils.Template.get('snapshot-list-item');
+    return snapshots.reduce(function (previous, snapshot) {
+      var view = {
+        id: snapshot.id,
+        name: snapshot.name,
+        description: snapshot.description ? '- ' + snapshot.description : '',
+        date: pskl.utils.DateUtils.format(snapshot.date, 'the {{Y}}/{{M}}/{{D}} at {{H}}:{{m}}'),
+        frames: snapshot.frames === 1 ? '1 frame' : snapshot.frames + ' frames',
+        resolution: pskl.utils.StringUtils.formatSize(snapshot.width, snapshot.height),
+        fps: snapshot.fps
+      };
+      return previous + pskl.utils.Template.replace(sessionItemTemplate, view);
+    }, '');
   };
 
   ns.SessionDetails.prototype.updateSnapshotPreview_ = function (snapshot) {
@@ -29123,10 +29193,9 @@ return Q;
     pskl.utils.Dom.removeClass('labeled', this.container);
     pskl.utils.Dom.removeClass('selected', this.container);
     var selectedOption;
-    if (size <= 4) {
-      selectedOption = this.container.querySelector('[data-size="' + size + '"]');
-    } else {
-      selectedOption = this.container.querySelector('[data-size="4"]');
+    selectedOption = this.container.querySelector('[data-size="' + size + '"]');
+    if (typeof selectedOption === 'undefined') {
+      selectedOption = this.container.querySelector('[data-size]:last-child');
       selectedOption.classList.add('labeled');
       selectedOption.setAttribute('real-size', size);
     }
@@ -29500,7 +29569,9 @@ return Q;
   };
 
   ns.IndexedDbStorageService.prototype.init = function () {
-    this.piskelDatabase.init();
+    this.piskelDatabase.init().catch(function (e) {
+      console.log('Failed to initialize PiskelDatabase, local browser saves will be unavailable.');
+    });
   };
 
   ns.IndexedDbStorageService.prototype.save = function (piskel) {
@@ -29523,7 +29594,7 @@ return Q;
   };
 
   ns.IndexedDbStorageService.prototype.load = function (name) {
-    this.piskelDatabase.get(name).then(function (piskelData) {
+    return this.piskelDatabase.get(name).then(function (piskelData) {
       if (typeof piskelData !== 'undefined') {
         var serialized = piskelData.serialized;
         pskl.utils.serialization.Deserializer.deserialize(
@@ -29539,7 +29610,7 @@ return Q;
   };
 
   ns.IndexedDbStorageService.prototype.remove = function (name) {
-    this.piskelDatabase.delete(name);
+    return this.piskelDatabase.delete(name);
   };
 
   ns.IndexedDbStorageService.prototype.getKeys = function () {

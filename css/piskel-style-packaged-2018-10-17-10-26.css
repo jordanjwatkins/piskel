@@ -107,7 +107,12 @@ body {
 }
 
 .checkbox-fix {
-  margin-left: 0;
+  margin: 3px 3px 3px 0;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
 }
 
 .hidden {
@@ -236,10 +241,10 @@ body {
 }
 
 .cursor-coordinates {
-  color:#888;
-  font-size:12px;
-  font-weight:bold;
-  font-family:monospace;
+  color: gold;
+  font-size: 12px;
+  font-weight: bold;
+  font-family: monospace;
 }
 
 .cursor-coordinates .drawing-zoom {
@@ -654,12 +659,14 @@ body {
 }
 
 .settings-item-grid-size,
+.settings-item-grid-spacing,
 .settings-item-grid-color {
   display: flex;
   align-items: center;
 }
 
 .settings-item-grid-size > label,
+.settings-item-grid-spacing > label,
 .settings-item-grid-color > label {
   width: 65px;
   flex-shrink: 0;
@@ -726,6 +733,7 @@ body {
   color: white !important;
   text-decoration: none !important;
 }
+
 /*******************************/
 /* Gif/Png Export Setting panel*/
 /*******************************/
@@ -1750,8 +1758,7 @@ To change `display` (e.g. `display: inline-block;`), we suggest using a common C
   height: 90px;
 }
 
-.browse-backups .session-list-empty,
-.browse-backups .snapshot-list-empty {
+.browse-backups .centered-message {
   position: absolute;
   left: 50%;
   width: 200px;
@@ -1762,7 +1769,16 @@ To change `display` (e.g. `display: inline-block;`), we suggest using a common C
   font-size: 16px;
   text-align: center;
   border: 1px solid;
+}
+
+.browse-backups .session-list-empty,
+.browse-backups .snapshot-list-empty {
   color: #bbb;
+}
+
+.browse-backups .session-list-error,
+.browse-backups .snapshot-list-error {
+  color: white;
 }
 
 .browse-backups .session-item {
