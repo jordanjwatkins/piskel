@@ -1327,6 +1327,10 @@
       <button type="button" class="button button-primary png-download-button">Download</button>
       <span class="png-export-dimension-info export-info"></span>
     </div>
+    <div class="export-panel-section export-panel-row">
+      <button type="button" class="button button-primary css-download-button">Download</button>
+      <span class="png-export-css-info export-info">Spritesheet CSS</span>
+    </div>
     <div class="export-panel-section export-panel-row png-export-datauri-section">
       <button type="button" style="white-space: nowrap;" class="button button-primary datauri-open-button">To data-uri</button>
       <span class="png-export-datauri-info export-info">Open the PNG export in your browser as a data-uri</span>
@@ -1335,10 +1339,6 @@
     <div class="export-panel-section">
       <div style="padding-bottom: 5px">
         <span class="highlight export-panel-row">Export for PixiJS Movie: </span>
-      </div>
-      <div class="checkbox-container" style="margin: 5px 0;">
-        <input id="png-pixi-inline-image" class="png-pixi-inline-image-checkbox checkbox-fix" type="checkbox" />
-        <label for="png-pixi-inline-image">Inline spritesheet as data-uri</label>
       </div>
       <div class="export-panel-row">
         <button type="button" class="button button-primary png-pixi-download-button"/>Download</button>
@@ -1429,9 +1429,9 @@
     (function () {
 
   /**
-   * See @Gruntfile.js => after build, -2018-10-17-10-26 is replaced by the build version
+   * See @Gruntfile.js => after build, -2018-10-19-12-12 is replaced by the build version
    */
-  var version = '-2018-10-17-10-26';
+  var version = '-2018-10-19-12-12';
   var versionHasNotBeenReplaced = version.indexOf('@@') === 0;
   if (versionHasNotBeenReplaced)  {
     version = '';
