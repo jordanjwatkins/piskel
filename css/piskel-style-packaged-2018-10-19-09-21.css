@@ -186,7 +186,7 @@ body {
 .left-column {
   vertical-align: top;
   height: 100%;
-  margin-right: 7px;
+  padding-right: 7px;
   flex-shrink: 0;
 }
 
@@ -205,7 +205,8 @@ body {
   flex-direction: column;
   position: relative;
 
-  margin-left: 10px;
+  /* Keep in sync with Constants.RIGHT_COLUMN_PADDING_LEFT */
+  padding-left: 10px;
   /* Add some padding for the absolutely positioned .cursor-coordinates */
   padding-bottom: 20px;
 }
@@ -251,6 +252,11 @@ body {
   position: absolute;
   top: -20px;
   left: 1px;
+}
+
+.cursor-coordinates .frame-info {
+  line-height: 1.5;
+  text-align: left;
 }
 
 /**
@@ -325,6 +331,7 @@ body {
 .canvas.canvas-overlay       {z-index:  9;}
 .canvas.onion-skin-canvas    {z-index:  10;}
 .canvas.layers-above-canvas  {z-index:  11;}
+
 @font-face {
   font-family: 'piskel';
   src:url('fonts/icomoon.eot?-3olv93');
@@ -537,7 +544,7 @@ body {
 .drawer-content {
   overflow: hidden;
   background-color: #444;
-  height: 550px;
+  height: 560px;
   max-height: 100%;
   width: 280px;
   border-top-left-radius: 4px;
@@ -672,11 +679,35 @@ body {
   flex-shrink: 0;
 }
 
-.settings-item-grid-size .size-picker-option {
+.grid-spacing-container .size-picker-option[data-size='1'] {
+  padding: 7px;
+}
+.grid-spacing-container .size-picker-option[data-size='2'] {
+  padding: 6px;
+}
+.grid-spacing-container .size-picker-option[data-size='4'] {
+  padding: 5px;
+}
+.grid-spacing-container .size-picker-option[data-size='8'] {
+  padding: 4px;
+}
+.grid-spacing-container .size-picker-option[data-size='16'] {
+  padding: 3px;
+}
+.grid-spacing-container .size-picker-option[data-size='32'] {
+  padding: 2px;
+}
+.grid-spacing-container .size-picker-option[data-size='64'] {
+  padding: 1px;
+}
+
+.settings-item-grid-size .size-picker-option,
+.settings-item-grid-spacing .size-picker-option {
   border-color: #888;
 }
 
-.settings-item-grid-size .size-picker-option:not(.selected):hover {
+.settings-item-grid-size .size-picker-option:not(.selected):hover,
+.settings-item-grid-spacing .size-picker-option:not(.selected):hover {
   border-color: white;
 }
 
@@ -880,7 +911,8 @@ body {
   overflow: hidden;
 }
 
-.export-panel-gif .button {
+.export-panel-gif .button,
+.export-panel-png .button {
   margin-right: 5px;
   width: 75px;
   flex-shrink: 0;
@@ -888,12 +920,6 @@ body {
 
 .export-panel-png .textfield {
   width: 50px;
-}
-
-.png-export-dimension-info,
-.png-export-datauri-info,
-.png-export-css-info {
-  margin-left: 5px;
 }
 
 #png-export-columns,
@@ -1171,7 +1197,7 @@ To change `display` (e.g. `display: inline-block;`), we suggest using a common C
 }
 .icon-common-swapcolors-arrow-grey {
   background-image: url(../img/icons.png);
-  background-position: -274px -204px;
+  background-position: -274px -222px;
   width: 18px;
   height: 18px;
 }
@@ -1183,7 +1209,7 @@ To change `display` (e.g. `display: inline-block;`), we suggest using a common C
 }
 .icon-frame-dragndrop-white {
   background-image: url(../img/icons.png);
-  background-position: -274px -106px;
+  background-position: -274px -46px;
   width: 30px;
   height: 30px;
 }
@@ -1201,115 +1227,127 @@ To change `display` (e.g. `display: inline-block;`), we suggest using a common C
 }
 .icon-frame-recyclebin-white {
   background-image: url(../img/icons.png);
-  background-position: -274px -46px;
+  background-position: -274px -106px;
   width: 30px;
   height: 30px;
 }
-.icon-minimap-popup-preview-arrow-gold {
-  background-image: url(../img/icons.png);
-  background-position: -295px -183px;
-  width: 18px;
-  height: 18px;
-}
-.icon-minimap-popup-preview-arrow-white {
+.icon-minimap-grid-gold {
   background-image: url(../img/icons.png);
   background-position: -300px -157px;
   width: 18px;
   height: 18px;
 }
+.icon-minimap-grid-white {
+  background-image: url(../img/icons.png);
+  background-position: -274px -204px;
+  width: 18px;
+  height: 18px;
+}
+.icon-minimap-popup-preview-arrow-gold {
+  background-image: url(../img/icons.png);
+  background-position: -292px -204px;
+  width: 18px;
+  height: 18px;
+}
+.icon-minimap-popup-preview-arrow-white {
+  background-image: url(../img/icons.png);
+  background-position: -295px -183px;
+  width: 18px;
+  height: 18px;
+}
 .icon-settings-export-white {
-  background-image: url(../img/icons.png);
-  background-position: -182px -46px;
-  width: 46px;
-  height: 46px;
-}
-.icon-settings-gear-white {
-  background-image: url(../img/icons.png);
-  background-position: -182px -92px;
-  width: 46px;
-  height: 46px;
-}
-.icon-settings-open-folder-white {
   background-image: url(../img/icons.png);
   background-position: 0px -182px;
   width: 46px;
   height: 46px;
 }
-.icon-settings-resize-white {
+.icon-settings-gear-white {
   background-image: url(../img/icons.png);
   background-position: -46px -182px;
   width: 46px;
   height: 46px;
 }
-.icon-settings-save-white {
+.icon-settings-open-folder-white {
   background-image: url(../img/icons.png);
   background-position: -92px -182px;
   width: 46px;
   height: 46px;
 }
-.icon-tool-circle {
+.icon-settings-resize-white {
   background-image: url(../img/icons.png);
   background-position: -138px -182px;
   width: 46px;
   height: 46px;
 }
-.icon-tool-colorpicker {
+.icon-settings-save-white {
   background-image: url(../img/icons.png);
   background-position: -228px 0px;
   width: 46px;
   height: 46px;
 }
-.icon-tool-colorswap {
+.icon-tool-circle {
+  background-image: url(../img/icons.png);
+  background-position: -228px -46px;
+  width: 46px;
+  height: 46px;
+}
+.icon-tool-colorpicker {
   background-image: url(../img/icons.png);
   background-position: -274px 0px;
   width: 46px;
   height: 46px;
 }
-.icon-tool-dithering {
-  background-image: url(../img/icons.png);
-  background-position: -228px -92px;
-  width: 46px;
-  height: 46px;
-}
-.icon-tool-eraser {
+.icon-tool-colorswap {
   background-image: url(../img/icons.png);
   background-position: -228px -138px;
   width: 46px;
   height: 46px;
 }
-.icon-tool-lasso-select {
+.icon-tool-dithering {
   background-image: url(../img/icons.png);
   background-position: 0px -228px;
   width: 46px;
   height: 46px;
 }
-.icon-tool-lighten {
+.icon-tool-eraser {
   background-image: url(../img/icons.png);
   background-position: -46px -228px;
   width: 46px;
   height: 46px;
 }
-.icon-tool-move {
+.icon-tool-lasso-select {
   background-image: url(../img/icons.png);
   background-position: -92px -228px;
   width: 46px;
   height: 46px;
 }
-.icon-tool-paint-bucket {
+.icon-tool-lighten {
   background-image: url(../img/icons.png);
   background-position: -138px -228px;
   width: 46px;
   height: 46px;
 }
-.icon-tool-pen {
+.icon-tool-move {
   background-image: url(../img/icons.png);
   background-position: -184px -228px;
   width: 46px;
   height: 46px;
 }
+.icon-tool-paint-bucket {
+  background-image: url(../img/icons.png);
+  background-position: -228px -92px;
+  width: 46px;
+  height: 46px;
+}
+.icon-tool-pen {
+  background-image: url(../img/icons.png);
+  background-position: -182px -92px;
+  width: 46px;
+  height: 46px;
+}
 .icon-tool-rectangle-select {
   background-image: url(../img/icons.png);
-  background-position: -228px -46px;
+  background-position: -182px -46px;
   width: 46px;
   height: 46px;
 }
@@ -1399,6 +1437,14 @@ To change `display` (e.g. `display: inline-block;`), we suggest using a common C
     background-size: 320px 274px;
   }
   .icon-frame-recyclebin-white {
+    background-image: url(../img/icons@2x.png);
+    background-size: 320px 274px;
+  }
+  .icon-minimap-grid-gold {
+    background-image: url(../img/icons@2x.png);
+    background-size: 320px 274px;
+  }
+  .icon-minimap-grid-white {
     background-image: url(../img/icons@2x.png);
     background-size: 320px 274px;
   }
@@ -2877,10 +2923,15 @@ To change `display` (e.g. `display: inline-block;`), we suggest using a common C
   cursor: pointer;
 }
 
-.layer-item .layer-name {
+.layer-item .layer-name,
+.layer-item .layer-name-input {
   padding: 0 0 0 10px;
   flex: 1 auto;
   white-space: nowrap;
+}
+
+.layer-item .layer-name-input {
+  width: 80%;
 }
 
 .layer-item .layer-name.overflowing-name {
@@ -2893,7 +2944,8 @@ To change `display` (e.g. `display: inline-block;`), we suggest using a common C
 }
 
 .layer-item-opacity {
-  padding-right: 8px;
+  padding: 0 8px 0 8px;
+  flex: 0 auto;
 }
 
 .current-layer-item,
@@ -2997,7 +3049,7 @@ To change `display` (e.g. `display: inline-block;`), we suggest using a common C
   line-height: 35px;
   width: 100%;
   color: gray;
-  font-size: 0.7em;
+  font-size: 0.8em;
   font-style: italic;
   text-align: center
 }
@@ -3173,6 +3225,14 @@ To change `display` (e.g. `display: inline-block;`), we suggest using a common C
 }
 
 /**
+ * If the icon represents an enabled state, the border should always be gold.
+ */
+.preview-contextual-action-enabled {
+  color: gold;
+  border-color: gold;
+}
+
+/**
  * Drop-down in preview size selection
  */
 .preview-drop-down {
@@ -3243,8 +3303,9 @@ To change `display` (e.g. `display: inline-block;`), we suggest using a common C
 
 @media (-webkit-min-device-pixel-ratio: 2),
        (min-resolution: 192dpi) {
-  background-image: url(../img/icons/minimap/minimap-popup-preview-arrow-gold@2x.png);
-
+  .icon-minimap-popup-preview-arrow-white:hover {
+    background-image: url(../img/icons/minimap/minimap-popup-preview-arrow-gold@2x.png);
+  }
 }
 
 .transformations-container {
@@ -4139,6 +4200,11 @@ See http://bgrins.github.io/spectrum/themes/ for instructions.
   font-weight: bold;
   text-align: center;
   cursor: default;
+}
+
+.preview-tile .tile-overlay.tile-count.toggled {
+  background-color: gold;
+  color: black;
 }
 
 .preview-tile .tile-overlay.delete-frame-action {

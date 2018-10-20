@@ -11797,6 +11797,8 @@ var Constants = {
 
   PREVIEW_FILM_SIZE : 96,
   ANIMATED_PREVIEW_WIDTH : 200,
+  // Keep in sync with padding-left: 10px in layout.css
+  RIGHT_COLUMN_PADDING_LEFT : 10,
 
   DEFAULT_PEN_COLOR : '#000000',
   TRANSPARENT_COLOR : 'rgba(0, 0, 0, 0)',
@@ -14139,22 +14141,6 @@ if (!Uint32Array.prototype.fill) {
       }
     }
   };
-
-  // Migration script for version 11 to version 12. Initialize the GRID_ENABLED pref from
-  // the current GRID_WIDTH and update the stored grid width to 1 if it was set to 0.
-  // SHOULD BE REMOVED FOR RELEASE 13.
-  ns.UserSettings.migrate_to_v0_12 = function () {
-    var storedGridEnabled = ns.UserSettings.readFromLocalStorage_('GRID_ENABLED');
-    if (typeof storedGridEnabled === 'undefined' || storedGridEnabled === null) {
-      var gridWidth = ns.UserSettings.get('GRID_WIDTH');
-      ns.UserSettings.writeToLocalStorage_('GRID_ENABLED', gridWidth > 0);
-    }
-
-    var storedGridWidth = ns.UserSettings.readFromLocalStorage_('GRID_WIDTH');
-    if (storedGridWidth === 0) {
-      ns.UserSettings.writeToLocalStorage_('GRID_WIDTH', 1);
-    }
-  };
 })();
 ;(function () {
   var ns = $.namespace('pskl.utils');
@@ -14264,6 +14250,7 @@ if (!Uint32Array.prototype.fill) {
       var serializedLayers = piskel.getLayers().map(function (l) {
         return pskl.utils.serialization.Serializer.serializeLayer(l);
       });
+
       return JSON.stringify({
         modelVersion : Constants.MODEL_VERSION,
         piskel : {
@@ -14272,7 +14259,8 @@ if (!Uint32Array.prototype.fill) {
           fps : pskl.app.piskelController.getFPS(),
           height : piskel.getHeight(),
           width : piskel.getWidth(),
-          layers : serializedLayers
+          layers : serializedLayers,
+          hiddenFrames : piskel.hiddenFrames,
         }
       });
     },
@@ -14370,6 +14358,7 @@ if (!Uint32Array.prototype.fill) {
 
     var descriptor = new pskl.model.piskel.Descriptor(name, description);
     this.piskel_ = new pskl.model.Piskel(piskelData.width, piskelData.height, piskelData.fps, descriptor);
+    this.hiddenFrames = piskelData.hiddenFrames || [];
 
     this.layersToLoad_ = piskelData.layers.length;
     piskelData.layers.forEach(this.deserializeLayer.bind(this));
@@ -14407,7 +14396,9 @@ if (!Uint32Array.prototype.fill) {
       image.src = chunk.base64PNG;
       return deferred.promise;
     })).then(function () {
-      frames.forEach(layer.addFrame.bind(layer));
+      frames.forEach(function (frame) {
+        layer.addFrame(frame);
+      });
       this.layers_[index] = layer;
       this.onLayerLoaded_();
     }.bind(this)).catch(function (error) {
@@ -14424,6 +14415,7 @@ if (!Uint32Array.prototype.fill) {
       this.layers_.forEach(function (layer) {
         this.piskel_.addLayer(layer);
       }.bind(this));
+      this.piskel_.hiddenFrames = this.hiddenFrames;
       this.callback_(this.piskel_);
     }
   };
@@ -14481,23 +14473,36 @@ if (!Uint32Array.prototype.fill) {
       // Layers meta
       var layerCount = arr16[6];
 
+      // Layers meta
+      var serializedHiddenFramesLength = arr16[7];
+
+      var currentIndex = 8;
       /********/
       /* DATA */
       /********/
       // Descriptor name
       var descriptorName = '';
       for (i = 0; i < descriptorNameLength; i++) {
-        descriptorName += String.fromCharCode(arr16[7 + i]);
+        descriptorName += String.fromCharCode(arr16[currentIndex + i]);
       }
+      currentIndex += descriptorNameLength;
 
       // Descriptor description
       var descriptorDescription = '';
       for (i = 0; i < descriptorDescriptionLength; i++) {
-        descriptorDescription = String.fromCharCode(arr16[7 + descriptorNameLength + i]);
+        descriptorDescription = String.fromCharCode(arr16[8 + descriptorNameLength + i]);
       }
+      currentIndex += descriptorDescriptionLength;
+
+      // Hidden frames
+      var serializedHiddenFrames = '';
+      for (i = 0; i < serializedHiddenFramesLength; i++) {
+        serializedHiddenFrames = String.fromCharCode(arr16[8 + descriptorNameLength + i]);
+      }
+      var hiddenFrames = serializedHiddenFrames.split('-');
+      currentIndex += serializedHiddenFramesLength;
 
       // Layers
-      var layerStartIndex = 7 + descriptorNameLength + descriptorDescriptionLength;
       var layers = [];
       var layer;
       for (i = 0; i < layerCount; i++) {
@@ -14505,27 +14510,27 @@ if (!Uint32Array.prototype.fill) {
         var frames = [];
 
         // Meta
-        var layerNameLength = arr16[layerStartIndex];
-        var opacity =  arr16[layerStartIndex + 1] / 65535;
-        var frameCount = arr16[layerStartIndex + 2];
-        var dataUriLengthFirstHalf = arr16[layerStartIndex + 3];
-        var dataUriLengthSecondHalf = arr16[layerStartIndex + 4];
+        var layerNameLength = arr16[currentIndex];
+        var opacity =  arr16[currentIndex + 1] / 65535;
+        var frameCount = arr16[currentIndex + 2];
+        var dataUriLengthFirstHalf = arr16[currentIndex + 3];
+        var dataUriLengthSecondHalf = arr16[currentIndex + 4];
         var dataUriLength = (dataUriLengthSecondHalf >>> 0) | (dataUriLengthFirstHalf << 16 >>> 0);
 
         // Name
         var layerName = '';
         for (j = 0; j < layerNameLength; j++) {
-          layerName += String.fromCharCode(arr16[layerStartIndex + 5 + j]);
+          layerName += String.fromCharCode(arr16[currentIndex + 5 + j]);
         }
 
         // Data URI
         var dataUri = '';
         for (j = 0; j < dataUriLength; j++) {
-          dataUri += String.fromCharCode(arr8[(layerStartIndex + 5 + layerNameLength) * 2 + j]);
+          dataUri += String.fromCharCode(arr8[(currentIndex + 5 + layerNameLength) * 2 + j]);
         }
         dataUri = 'data:image/png;base64,' + dataUri;
 
-        layerStartIndex += Math.ceil(5 + layerNameLength + (dataUriLength / 2));
+        currentIndex += Math.ceil(5 + layerNameLength + (dataUriLength / 2));
 
         layer.name = layerName;
         layer.opacity = opacity;
@@ -14536,6 +14541,7 @@ if (!Uint32Array.prototype.fill) {
 
       var descriptor = new pskl.model.piskel.Descriptor(descriptorName, descriptorDescription);
       var piskel = new pskl.model.Piskel(width, height, fps, descriptor);
+      piskel.hiddenFrames = hiddenFrames;
       var loadedLayers = 0;
 
       var loadLayerImage = function(layer, cb) {
@@ -14669,7 +14675,15 @@ if (!Uint32Array.prototype.fill) {
         framesData.push({uri: dataUri, length: dataUriLength});
       }
 
-      var bytes = ns.ArrayBufferSerializer.calculateRequiredBytes(piskel, framesData);
+      var frames = pskl.app.piskelController.getLayerAt(0).getFrames();
+      var hiddenFrames = piskel.hiddenFrames;
+      var serializedHiddenFrames = hiddenFrames.join('-');
+
+      var bytes = ns.ArrayBufferSerializer.calculateRequiredBytes(
+        piskel,
+        framesData,
+        serializedHiddenFrames
+      );
 
       var buffer = new ArrayBuffer(bytes);
       var arr8 = new Uint8Array(buffer);
@@ -14698,21 +14712,33 @@ if (!Uint32Array.prototype.fill) {
       // Layers meta
       arr16[6] = piskel.getLayers().length;
 
+      // Frames meta
+      arr16[7] = serializedHiddenFrames.length;
+
+      var currentIndex = 8;
+
       /********/
       /* DATA */
       /********/
       // Descriptor name
       for (i = 0; i < descriptorNameLength; i++) {
-        arr16[7 + i] = descriptorName.charCodeAt(i);
+        arr16[currentIndex + i] = descriptorName.charCodeAt(i);
       }
+      currentIndex = currentIndex + descriptorNameLength;
 
       // Descriptor description
       for (i = 0; i < descriptorDescriptionLength; i++) {
-        arr16[7 + descriptorNameLength + i] = descriptorDescription.charCodeAt(i);
+        arr16[currentIndex + i] = descriptorDescription.charCodeAt(i);
       }
+      currentIndex = currentIndex + descriptorDescriptionLength;
+
+      // Hidden frames
+      for (i = 0; i < serializedHiddenFrames.length; i++) {
+        arr16[currentIndex + i] = serializedHiddenFrames.charCodeAt(i);
+      }
+      currentIndex = currentIndex + serializedHiddenFrames.length;
 
       // Layers
-      var layerStartIndex = 7 + descriptorNameLength + descriptorDescriptionLength;
       for (i = 0, layers = piskel.getLayers(); i < layers.length; i++) {
         var layer = layers[i];
         var frames = layer.getFrames();
@@ -14726,23 +14752,23 @@ if (!Uint32Array.prototype.fill) {
         dataUriLength = framesData[i].length;
 
         // Meta
-        arr16[layerStartIndex] = layerNameLength;
-        arr16[layerStartIndex + 1] = Math.floor(opacity * 65535);
-        arr16[layerStartIndex + 2] = frameCount;
-        arr16[layerStartIndex + 3] = ((dataUriLength & 0xffff0000) >> 16) >>> 0; // Upper 16
-        arr16[layerStartIndex + 4] = ((dataUriLength & 0x0000ffff)) >>> 0;       // Lower 16
+        arr16[currentIndex] = layerNameLength;
+        arr16[currentIndex + 1] = Math.floor(opacity * 65535);
+        arr16[currentIndex + 2] = frameCount;
+        arr16[currentIndex + 3] = ((dataUriLength & 0xffff0000) >> 16) >>> 0; // Upper 16
+        arr16[currentIndex + 4] = ((dataUriLength & 0x0000ffff)) >>> 0;       // Lower 16
 
         // Name
         for (j = 0; j < layerNameLength; j++) {
-          arr16[layerStartIndex + 5 + j] = layerName.charCodeAt(j);
+          arr16[currentIndex + 5 + j] = layerName.charCodeAt(j);
         }
 
         // Data URI
         for (j = 0; j < dataUriLength; j++) {
-          arr8[(layerStartIndex + 5 + layerNameLength) * 2 + j] = dataUri.charCodeAt(j);
+          arr8[(currentIndex + 5 + layerNameLength) * 2 + j] = dataUri.charCodeAt(j);
         }
 
-        layerStartIndex += Math.ceil(5 + layerNameLength + (dataUriLength / 2));
+        currentIndex += Math.ceil(5 + layerNameLength + (dataUriLength / 2));
       }
 
       return buffer;
@@ -20358,6 +20384,7 @@ return Q;
       this.descriptor = descriptor;
       this.savePath = null;
       this.fps = fps;
+      this.hiddenFrames = [];
     } else {
       throw 'Missing arguments in Piskel constructor : ' + Array.prototype.join.call(arguments, ',');
     }
@@ -20506,7 +20533,7 @@ return Q;
 
   /**
    * Open and initialize the database.
-   * Returns a promise that resolves when the databse is opened.
+   * Returns a promise that resolves when the database is opened.
    */
   ns.BackupDatabase.prototype.init = function () {
     var request = window.indexedDB.open(DB_NAME, DB_VERSION);
@@ -20968,9 +20995,9 @@ return Q;
   };
 
   ns.SelectionManager.prototype.init = function () {
-    $.subscribe(Events.SELECTION_CREATED, $.proxy(this.onSelectionCreated_, this));
-    $.subscribe(Events.SELECTION_DISMISSED, $.proxy(this.onSelectionDismissed_, this));
-    $.subscribe(Events.SELECTION_MOVE_REQUEST, $.proxy(this.onSelectionMoved_, this));
+    $.subscribe(Events.SELECTION_CREATED, this.onSelectionCreated_.bind(this));
+    $.subscribe(Events.SELECTION_DISMISSED, this.onSelectionDismissed_.bind(this));
+    $.subscribe(Events.SELECTION_MOVE_REQUEST, this.onSelectionMoved_.bind(this));
     $.subscribe(Events.CLIPBOARD_COPY, this.copy.bind(this));
     $.subscribe(Events.CLIPBOARD_CUT, this.copy.bind(this));
     $.subscribe(Events.CLIPBOARD_PASTE, this.paste.bind(this));
@@ -20979,7 +21006,7 @@ return Q;
     pskl.app.shortcutService.registerShortcut(shortcuts.SELECTION.DELETE, this.onDeleteShortcut_.bind(this));
     pskl.app.shortcutService.registerShortcut(shortcuts.SELECTION.COMMIT, this.commit.bind(this));
 
-    $.subscribe(Events.TOOL_SELECTED, $.proxy(this.onToolSelected_, this));
+    $.subscribe(Events.TOOL_SELECTED, this.onToolSelected_.bind(this));
   };
 
   /**
@@ -21432,7 +21459,7 @@ return Q;
     this.updateLayersCanvasOpacity_(pskl.UserSettings.get(pskl.UserSettings.LAYER_OPACITY));
 
     $.subscribe(Events.PISKEL_RESET, this.flush.bind(this));
-    $.subscribe(Events.USER_SETTINGS_CHANGED, $.proxy(this.onUserSettingsChange_, this));
+    $.subscribe(Events.USER_SETTINGS_CHANGED, this.onUserSettingsChange_.bind(this));
   };
 
   pskl.utils.inherit(pskl.rendering.layer.LayersRenderer, pskl.rendering.CompositeRenderer);
@@ -21612,7 +21639,7 @@ return Q;
     this.displayWidth = width;
     this.displayHeight = height;
     if (this.displayCanvas) {
-      $(this.displayCanvas).remove();
+      this.displayCanvas.parentNode.removeChild(this.displayCanvas);
       this.displayCanvas = null;
     }
     this.createDisplayCanvas_();
@@ -21704,7 +21731,7 @@ return Q;
 
     this.displayCanvas = pskl.utils.CanvasUtils.createCanvas(width, height, this.classList);
     pskl.utils.CanvasUtils.disableImageSmoothing(this.displayCanvas);
-    this.container.append(this.displayCanvas);
+    this.container.appendChild(this.displayCanvas);
   };
 
   ns.FrameRenderer.prototype.onUserSettingsChange_ = function (evt, settingName, settingValue) {
@@ -21735,9 +21762,9 @@ return Q;
    * @public
    */
   ns.FrameRenderer.prototype.getCoordinates = function(x, y) {
-    var containerOffset = this.container.offset();
-    x = x - containerOffset.left;
-    y = y - containerOffset.top;
+    var containerRect = this.container.getBoundingClientRect();
+    x = x - containerRect.left;
+    y = y - containerRect.top;
 
     // apply margins
     x = x - this.margin.x;
@@ -21766,9 +21793,9 @@ return Q;
     x = x + this.margin.x;
     y = y + this.margin.y;
 
-    var containerOffset = this.container.offset();
-    x = x + containerOffset.left;
-    y = y + containerOffset.top;
+    var containerRect = this.container.getBoundingClientRect();
+    x = x + containerRect.left;
+    y = y + containerRect.top;
 
     return {
       x : x + (cellSize / 2),
@@ -21838,7 +21865,6 @@ return Q;
       displayContext.scale(1 / z, 1 / z);
 
       var drawOrClear;
-      var drawing = true;
       if (gridColor === Constants.TRANSPARENT_COLOR) {
         drawOrClear = displayContext.clearRect.bind(displayContext);
       } else {
@@ -21975,11 +22001,10 @@ return Q;
     this.container = container;
     this.setZoom(zoom);
 
-    var containerEl = container.get(0);
-    var containerDocument = containerEl.ownerDocument;
+    var containerDocument = container.ownerDocument;
     this.frameContainer = containerDocument.createElement('div');
     this.frameContainer.classList.add('background-image-frame-container');
-    container.get(0).appendChild(this.frameContainer);
+    container.appendChild(this.frameContainer);
 
     this.cachedFrameProcessor = new pskl.model.frame.CachedFrameProcessor();
     this.cachedFrameProcessor.setFrameProcessor(this.frameToDataUrl_.bind(this));
@@ -22329,6 +22354,16 @@ return Q;
       l.addFrameAt(this.createEmptyFrame_(), index);
     }.bind(this));
 
+    this.onFrameAddedAt_(index);
+  };
+
+  ns.PiskelController.prototype.onFrameAddedAt_ = function (index) {
+    this.piskel.hiddenFrames = this.piskel.hiddenFrames.map(function (hiddenIndex) {
+      if (hiddenIndex >= index) {
+        return hiddenIndex + 1;
+      }
+    });
+
     this.setCurrentFrameIndex(index);
   };
 
@@ -22342,6 +22377,14 @@ return Q;
     this.getLayers().forEach(function (l) {
       l.removeFrameAt(index);
     });
+
+    // Update the array of hidden frames since some hidden indexes might have shifted.
+    this.piskel.hiddenFrames = this.piskel.hiddenFrames.map(function (hiddenIndex) {
+      if (hiddenIndex > index) {
+        return hiddenIndex - 1;
+      }
+    });
+
     // Current frame index is impacted if the removed frame was before the current frame
     if (this.currentFrameIndex >= index && this.currentFrameIndex > 0) {
       this.setCurrentFrameIndex(this.currentFrameIndex - 1);
@@ -22356,13 +22399,64 @@ return Q;
     this.getLayers().forEach(function (l) {
       l.duplicateFrameAt(index);
     });
-    this.setCurrentFrameIndex(index + 1);
+    this.onFrameAddedAt_(index + 1);
+  };
+
+  /**
+   * Toggle frame visibility for the frame at the provided index.
+   * A visible frame will be included in the animated preview.
+   */
+  ns.PiskelController.prototype.toggleFrameVisibilityAt = function (index) {
+    var hiddenFrames = this.piskel.hiddenFrames;
+    if (hiddenFrames.indexOf(index) === -1) {
+      hiddenFrames.push(index);
+    } else {
+      hiddenFrames = hiddenFrames.filter(function (i) {
+        return i !== index;
+      });
+    }
+
+    // Keep the hiddenFrames array sorted.
+    this.piskel.hiddenFrames = hiddenFrames.sort();
   };
 
   ns.PiskelController.prototype.moveFrame = function (fromIndex, toIndex) {
     this.getLayers().forEach(function (l) {
       l.moveFrame(fromIndex, toIndex);
     });
+
+    // Update the array of hidden frames since some hidden indexes might have shifted.
+    this.piskel.hiddenFrames = this.piskel.hiddenFrames.map(function (index) {
+      if (index === fromIndex) {
+        return toIndex;
+      }
+
+      // All the frames between fromIndex and toIndex changed their index.
+      var isImpacted = index >= Math.min(fromIndex, toIndex) &&
+                       index <= Math.max(fromIndex, toIndex);
+      if (isImpacted) {
+        if (fromIndex < toIndex) {
+          // If the frame moved to a higher index, all impacted frames had their index
+          // reduced by 1.
+          return index - 1;
+        } else {
+          // Otherwise, they had their index increased by 1.
+          return index + 1;
+        }
+      }
+    });
+  };
+
+  ns.PiskelController.prototype.hasVisibleFrameAt = function (index) {
+    return this.piskel.hiddenFrames.indexOf(index) === -1;
+  };
+
+  ns.PiskelController.prototype.getVisibleFrameIndexes = function () {
+    return this.getCurrentLayer().getFrames().map(function (frame, index) {
+      return index;
+    }).filter(function (index) {
+      return this.piskel.hiddenFrames.indexOf(index) === -1;
+    }.bind(this));
   };
 
   ns.PiskelController.prototype.getFrameCount = function () {
@@ -22552,6 +22646,7 @@ return Q;
     this.saveWrap_('moveLayerDown', true);
     this.saveWrap_('removeCurrentLayer', true);
     this.saveWrap_('setLayerOpacityAt', true);
+    this.saveWrap_('toggleFrameVisibilityAt', true);
 
     var shortcuts = pskl.service.keyboard.Shortcuts;
     pskl.app.shortcutService.registerShortcut(shortcuts.MISC.PREVIOUS_FRAME, this.selectPreviousFrame.bind(this));
@@ -22649,6 +22744,7 @@ return Q;
     $.subscribe(Events.DRAG_END, this.onDragEnd_.bind(this));
     $.subscribe(Events.FRAME_SIZE_CHANGED, this.redraw.bind(this));
     $.subscribe(Events.ZOOM_CHANGED, this.redraw.bind(this));
+    $.subscribe(Events.PISKEL_RESET, this.redraw.bind(this));
 
     this.redraw();
   };
@@ -22676,7 +22772,13 @@ return Q;
       html += '<div class="drawing-zoom">x' + zoom + '</div>';
     }
 
-    this.coordinatesContainer.innerHTML = this.getFrameSizeHTML_() + html;
+    this.coordinatesContainer.innerHTML = this.getFrameSizeHTML_() + html + this.getCurrentFrameIndexHTML_();
+  };
+
+  ns.CursorCoordinatesController.prototype.getCurrentFrameIndexHTML_ = function () {
+    var currentFrameIndex = this.piskelController.getCurrentFrameIndex() + 1;
+    var frameCount = this.piskelController.getFrameCount();
+    return '<div class="frame-info">' + currentFrameIndex + '/' + frameCount + '</div>';
   };
 
   ns.CursorCoordinatesController.prototype.getFrameSizeHTML_ = function () {
@@ -22730,7 +22832,7 @@ return Q;
 
     var cfg = {
       'zoom': this.calculateZoom_(),
-      'supportGridRendering' : true,
+      'supportGridRendering' : false,
       'height' : this.getContainerHeight_(),
       'width' : this.getContainerWidth_(),
       'xOffset' : 0,
@@ -22738,9 +22840,10 @@ return Q;
     };
 
     this.overlayRenderer = new pskl.rendering.frame.CachedFrameRenderer(this.container, cfg, ['canvas-overlay']);
-    this.renderer = new pskl.rendering.frame.CachedFrameRenderer(this.container, cfg, ['drawing-canvas']);
     this.onionSkinRenderer = pskl.rendering.OnionSkinRenderer.createInContainer(this.container, cfg, piskelController);
     this.layersRenderer = new pskl.rendering.layer.LayersRenderer(this.container, cfg, piskelController);
+    cfg.supportGridRendering = true;
+    this.renderer = new pskl.rendering.frame.CachedFrameRenderer(this.container, cfg, ['drawing-canvas']);
 
     this.compositeRenderer = new pskl.rendering.CompositeRenderer();
     this.compositeRenderer
@@ -22758,12 +22861,12 @@ return Q;
   ns.DrawingController.prototype.init = function () {
     this.initMouseBehavior();
 
-    $.subscribe(Events.TOOL_SELECTED, $.proxy(function(evt, toolBehavior) {
+    $.subscribe(Events.TOOL_SELECTED, (function(evt, toolBehavior) {
       this.currentToolBehavior = toolBehavior;
       this.overlayFrame.clear();
-    }, this));
+    }).bind(this));
 
-    $(window).resize($.proxy(this.startResizeTimer_, this));
+    window.addEventListener('resize', this.startResizeTimer_.bind(this));
 
     $.subscribe(Events.USER_SETTINGS_CHANGED, this.onUserSettingsChange_.bind(this));
     $.subscribe(Events.FRAME_SIZE_CHANGED, this.onFrameSizeChange_.bind(this));
@@ -22784,13 +22887,12 @@ return Q;
   };
 
   ns.DrawingController.prototype.initMouseBehavior = function() {
-    var body = $('body');
-    this.container.mousedown($.proxy(this.onMousedown_, this));
+    this.container.addEventListener('mousedown', this.onMousedown_.bind(this));
 
     if (pskl.utils.UserAgent.isChrome || pskl.utils.UserAgent.isIE11) {
-      this.container.on('mousewheel', $.proxy(this.onMousewheel_, this));
+      this.container.addEventListener('mousewheel', this.onMousewheel_.bind(this));
     } else {
-      this.container.on('wheel', $.proxy(this.onMousewheel_, this));
+      this.container.addEventListener('wheel', this.onMousewheel_.bind(this));
     }
 
     window.addEventListener('mouseup', this.onMouseup_.bind(this));
@@ -22801,22 +22903,20 @@ return Q;
     window.addEventListener('touchend', this.onTouchend_.bind(this));
 
     // Deactivate right click:
-    body.contextmenu(this.onCanvasContextMenu_);
-
+    document.body.addEventListener('contextmenu', this.onCanvasContextMenu_.bind(this));
   };
 
   ns.DrawingController.prototype.startResizeTimer_ = function () {
     if (this.resizeTimer) {
       window.clearInterval(this.resizeTimer);
     }
-    this.resizeTimer = window.setTimeout($.proxy(this.afterWindowResize_, this), 200);
+    this.resizeTimer = window.setTimeout(this.afterWindowResize_.bind(this), 200);
   };
 
   ns.DrawingController.prototype.afterWindowResize_ = function () {
     var initialWidth = this.compositeRenderer.getDisplaySize().width;
 
     this.compositeRenderer.setDisplaySize(this.getContainerWidth_(), this.getContainerHeight_());
-    this.centerColumnWrapperHorizontally_();
     var ratio = this.compositeRenderer.getDisplaySize().width / initialWidth;
     var newZoom = ratio * this.compositeRenderer.getZoom();
     this.compositeRenderer.setZoom(newZoom);
@@ -22841,7 +22941,6 @@ return Q;
 
   ns.DrawingController.prototype.onFrameSizeChange_ = function () {
     this.compositeRenderer.setDisplaySize(this.getContainerWidth_(), this.getContainerHeight_());
-    this.centerColumnWrapperHorizontally_();
     this.compositeRenderer.setZoom(this.calculateZoom_());
     this.compositeRenderer.setOffset(0, 0);
     $.publish(Events.ZOOM_CHANGED);
@@ -22949,8 +23048,7 @@ return Q;
     $.publish(Events.CURSOR_MOVED, [coords.x, coords.y]);
   };
 
-  ns.DrawingController.prototype.onMousewheel_ = function (jQueryEvent) {
-    var evt = jQueryEvent.originalEvent;
+  ns.DrawingController.prototype.onMousewheel_ = function (evt) {
     // Ratio between wheelDeltaY (mousewheel event) and deltaY (wheel event) is -40
     var delta;
     if (pskl.utils.UserAgent.isIE11) {
@@ -23058,6 +23156,8 @@ return Q;
       // Picking color after ALT+click or middle mouse button click.
       this.pickColorAt_(coords);
       this.isPickingColor = false;
+      // Flash the cursor to briefly show the colorpicker cursor.
+      this.flashColorPicker_();
     } else if (isMiddleDrag) {
       // Stop the drag handler after a middle button drag action.
       this.dragHandler.stopDrag();
@@ -23093,6 +23193,16 @@ return Q;
     $.publish(evt, [color]);
   };
 
+  ns.DrawingController.prototype.flashColorPicker_ = function () {
+    document.body.classList.add('tool-colorpicker');
+    document.body.classList.remove(this.currentToolBehavior.toolId);
+    window.clearTimeout(this.flashColorPickerTimer);
+    this.flashColorPickerTimer = window.setTimeout(function () {
+      document.body.classList.remove('tool-colorpicker');
+      document.body.classList.add(this.currentToolBehavior.toolId);
+    }.bind(this), 200);
+  };
+
   /**
    * Translate absolute x,y screen coordinates into sprite coordinates
    * @param  {Number} screenX
@@ -23111,7 +23221,8 @@ return Q;
    * @private
    */
   ns.DrawingController.prototype.onCanvasContextMenu_ = function (event) {
-    if ($(event.target).closest('#drawing-canvas-container').length) {
+    // closest() not really available everywhere yet, just skip if missing.
+    if (event.target.closest && event.target.closest('#drawing-canvas-container')) {
       // Deactivate right click on drawing canvas only.
       event.preventDefault();
       event.stopPropagation();
@@ -23149,17 +23260,21 @@ return Q;
   };
 
   ns.DrawingController.prototype.getAvailableHeight_ = function () {
-    return $('#main-wrapper').height();
+    return document.querySelector('#main-wrapper').getBoundingClientRect().height;
+  };
+
+  ns.DrawingController.prototype.getSelectorWidth_ = function (selector) {
+    return document.querySelector(selector).getBoundingClientRect().width;
   };
 
   ns.DrawingController.prototype.getAvailableWidth_ = function () {
-    var leftSectionWidth = $('.left-column').outerWidth(true);
-    var rightSectionWidth = $('.right-column').outerWidth(true);
-    var toolsContainerWidth = $('#tool-section').outerWidth(true);
-    var settingsContainerWidth = $('#application-action-section').outerWidth(true);
+    var leftSectionWidth = this.getSelectorWidth_('.left-column');
+    var rightSectionWidth = this.getSelectorWidth_('.right-column');
+    var toolsContainerWidth = this.getSelectorWidth_('#tool-section');
+    var settingsContainerWidth = this.getSelectorWidth_('#application-action-section');
 
     var usedWidth = leftSectionWidth + rightSectionWidth + toolsContainerWidth + settingsContainerWidth;
-    var availableWidth = $('#main-wrapper').width() - usedWidth;
+    var availableWidth = this.getSelectorWidth_('#main-wrapper') - usedWidth;
 
     var comfortMargin = 10;
     return availableWidth - comfortMargin;
@@ -23171,17 +23286,6 @@ return Q;
 
   ns.DrawingController.prototype.getContainerWidth_ = function () {
     return this.getAvailableWidth_();
-  };
-
-  /**
-   * @private
-   */
-  ns.DrawingController.prototype.centerColumnWrapperHorizontally_ = function() {
-    var containerHeight = this.getContainerHeight_();
-    var verticalGapInPixel = Math.floor(($('#main-wrapper').height() - containerHeight) / 2);
-    $('#column-wrapper').css({
-      'top': verticalGapInPixel + 'px'
-    });
   };
 
   ns.DrawingController.prototype.getRenderer = function () {
@@ -23302,7 +23406,8 @@ return Q;
     SELECT : 'select',
     CLONE : 'clone',
     DELETE : 'delete',
-    NEW_FRAME : 'newframe'
+    NEW_FRAME : 'newframe',
+    TOGGLE: 'toggle'
   };
 
   ns.FramesListController = function (piskelController, container) {
@@ -23411,6 +23516,8 @@ return Q;
       this.tiles.push(newtile);
       this.previewList.insertBefore(newtile, this.addFrameTile);
       this.updateScrollerOverflows();
+    } else if (action == ACTION.TOGGLE) {
+      this.piskelController.toggleFrameVisibilityAt(index);
     }
 
     this.flagForRedraw_();
@@ -23424,9 +23531,17 @@ return Q;
       // Remove selected class
       this.tiles[i].classList.remove('selected');
 
+      // Remove toggle class
+      this.tiles[i].querySelector('.tile-count').classList.remove('toggled');
+
       // Update tile numbers
       this.tiles[i].setAttribute('data-tile-number', i);
       this.tiles[i].querySelector('.tile-count').innerHTML = (i + 1);
+
+      // Update visibility
+      if (this.piskelController.hasVisibleFrameAt(i)) {
+        this.tiles[i].querySelector('.tile-count').classList.add('toggled');
+      }
 
       // Check if any tile is updated
       var hash = this.piskelController.getCurrentLayer().getFrameAt(i).getHash();
@@ -23459,7 +23574,10 @@ return Q;
     this.previewList.innerHTML = '';
 
     // Manually remove tooltips since mouseout events were shortcut by the DOM refresh:
-    $('.tooltip').remove();
+    var tooltips = document.querySelectorAll('.tooltip');
+    Array.prototype.forEach.call(tooltips, function (tooltip) {
+      tooltip.parentNode.removeChild(tooltip);
+    });
 
     var frameCount = this.piskelController.getFrameCount();
 
@@ -23487,8 +23605,8 @@ return Q;
   ns.FramesListController.prototype.initDragndropBehavior_ = function () {
     $(this.previewList).sortable({
       placeholder: 'preview-tile preview-tile-drop-proxy',
-      update: $.proxy(this.onUpdate_, this),
-      stop: $.proxy(this.onSortableStop_, this),
+      update: this.onUpdate_.bind(this),
+      stop: this.onSortableStop_.bind(this),
       items: '.preview-tile',
       axis: 'y',
       tolerance: 'pointer'
@@ -23500,8 +23618,10 @@ return Q;
    * @private
    */
   ns.FramesListController.prototype.onUpdate_ = function (event, ui) {
-    var originFrameId = parseInt(ui.item.data('tile-number'), 10);
-    var targetInsertionId = $('.preview-tile').index(ui.item);
+    var movedItem = ui.item.get(0);
+    var originFrameId = parseInt(movedItem.dataset.tileNumber, 10);
+    var tiles = document.querySelectorAll('.preview-tile');
+    var targetInsertionId = Array.prototype.indexOf.call(tiles, movedItem);
 
     this.piskelController.moveFrame(originFrameId, targetInsertionId);
     this.piskelController.setCurrentFrameIndex(targetInsertionId);
@@ -23517,14 +23637,13 @@ return Q;
   ns.FramesListController.prototype.onSortableStop_ = function (event, ui) {
     this.justDropped = true;
 
-    this.resizeTimer = window.setTimeout($.proxy(function() {
+    this.resizeTimer = window.setTimeout((function() {
       this.justDropped = false;
-    }, this), 200);
+    }).bind(this), 200);
   };
 
   /**
    * @private
-   * TODO(vincz): clean this giant rendering function & remove listeners.
    */
   ns.FramesListController.prototype.createPreviewTile_ = function(tileNumber) {
     var currentFrame = this.piskelController.getCurrentLayer().getFrameAt(tileNumber);
@@ -23583,8 +23702,12 @@ return Q;
     previewTileRoot.appendChild(dndHandle);
 
     // Add tile count
-    var tileCount = document.createElement('div');
-    tileCount.className = 'tile-overlay tile-count';
+    var tileCount = document.createElement('button');
+    tileCount.setAttribute('rel', 'tooltip');
+    tileCount.setAttribute('title', 'Toggle for preview');
+    tileCount.setAttribute('data-tile-number', tileNumber);
+    tileCount.setAttribute('data-tile-action', ACTION.TOGGLE);
+    tileCount.className = 'tile-overlay tile-count toggle-frame-action';
     tileCount.innerHTML = tileNumber + 1;
     previewTileRoot.appendChild(tileCount);
 
@@ -23678,15 +23801,18 @@ return Q;
 ;(function () {
   var ns = $.namespace('pskl.controller');
 
-  var TOGGLE_LAYER_SHORTCUT = 'alt+L';
-
   ns.LayersListController = function (piskelController) {
     this.piskelController = piskelController;
-    this.layerPreviewShortcut = pskl.service.keyboard.Shortcuts.MISC.LAYER_PREVIEW  ;
+    this.layerPreviewShortcut = pskl.service.keyboard.Shortcuts.MISC.LAYER_PREVIEW;
+    this.startRenamingCurrentLayer_ = this.startRenamingCurrentLayer_.bind(this);
+    this.onRenameInput_ = this.onRenameInput_.bind(this);
   };
 
   ns.LayersListController.prototype.init = function () {
+    this.isRenaming = false;
+
     this.layerItemTemplate_ = pskl.utils.Template.get('layer-item-template');
+    this.layerNameInputTemplate_ = pskl.utils.Template.get('layer-name-input-template');
     this.rootEl = document.querySelector('.layers-list-container');
     this.layersListEl = document.querySelector('.layers-list');
     this.toggleLayerPreviewEl = document.querySelector('.layers-toggle-preview');
@@ -23701,7 +23827,7 @@ return Q;
     this.updateToggleLayerPreview_();
 
     $.subscribe(Events.PISKEL_RESET, this.renderLayerList_.bind(this));
-    $.subscribe(Events.USER_SETTINGS_CHANGED, $.proxy(this.onUserSettingsChange_, this));
+    $.subscribe(Events.USER_SETTINGS_CHANGED, this.onUserSettingsChange_.bind(this));
   };
 
   ns.LayersListController.prototype.renderLayerList_ = function () {
@@ -23754,7 +23880,6 @@ return Q;
 
   ns.LayersListController.prototype.updateButtonStatus_ = function () {
     var layers = this.piskelController.getLayers();
-    var currentLayer = this.piskelController.getCurrentLayer();
     var index = this.piskelController.getCurrentLayerIndex();
 
     var isLast = index === 0;
@@ -23795,19 +23920,46 @@ return Q;
 
   ns.LayersListController.prototype.addLayerItem = function (layer, index) {
     var isSelected = this.piskelController.getCurrentLayer() === layer;
+    var isRenaming = isSelected && this.isRenaming;
     var layerItemHtml = pskl.utils.Template.replace(this.layerItemTemplate_, {
       'layername' : layer.getName(),
       'layerindex' : index,
       'isselected:current-layer-item' : isSelected,
-      'opacity': layer.getOpacity()
+      'opacity' : layer.getOpacity()
     });
     var layerItem = pskl.utils.Template.createFromHTML(layerItemHtml);
     this.layersListEl.insertBefore(layerItem, this.layersListEl.firstChild);
     if (layerItem.offsetWidth < layerItem.scrollWidth) {
-      $(layerItem).find('.layer-name')
-        .addClass('overflowing-name')
-        .attr('title', layer.getName())
-        .tooltip();
+      var layerNameEl = layerItem.querySelector('.layer-name');
+      layerNameEl.classList.add('overflowing-name');
+      layerNameEl.setAttribute('title', layer.getName());
+      layerNameEl.setAttribute('rel', 'tooltip');
+    }
+    if (isSelected) {
+      layerItem.removeEventListener('dblclick', this.startRenamingCurrentLayer_);
+      layerItem.addEventListener('dblclick', this.startRenamingCurrentLayer_);
+    }
+    if (isRenaming) {
+      var layerNameInputHtml = pskl.utils.Template.replace(this.layerNameInputTemplate_, {
+        'layername' : layer.getName()
+      });
+      var layerNameInput = pskl.utils.Template.createFromHTML(layerNameInputHtml);
+      var layerNameEl = layerItem.querySelector('.layer-name');
+      layerItem.replaceChild(layerNameInput, layerNameEl);
+      layerNameInput.removeEventListener('blur', this.onRenameInput_);
+      layerNameInput.removeEventListener('keydown', this.onRenameInput_);
+      layerNameInput.addEventListener('blur', this.onRenameInput_);
+      layerNameInput.addEventListener('keydown', this.onRenameInput_);
+      layerNameInput.focus();
+      layerNameInput.select();
+    }
+    var opacity = layer.getOpacity();
+    if (opacity == 1) {
+      layerItem.querySelector('.layer-item-opacity').style.color = '#ffd700';
+    } else if (opacity == 0) {
+      layerItem.querySelector('.layer-item-opacity').style.color = '#969696';
+    } else {
+      layerItem.querySelector('.layer-item-opacity').style.color = '#ffffff';
     }
   };
 
@@ -23817,8 +23969,13 @@ return Q;
     if (el.classList.contains('button')) {
       this.onButtonClick_(el, evt);
     } else if (el.classList.contains('layer-name')) {
+      var currentIndex = this.piskelController.getCurrentLayerIndex();
       index = pskl.utils.Dom.getData(el, 'layerIndex');
-      this.piskelController.setCurrentLayerIndex(parseInt(index, 10));
+      if (index != currentIndex) {
+        var currentItem = el.parentElement.parentElement.querySelector('.current-layer-item');
+        currentItem.removeEventListener('dblclick', this.startRenamingCurrentLayer_);
+        this.piskelController.setCurrentLayerIndex(parseInt(index, 10));
+      }
     } else if (el.classList.contains('layer-item-opacity')) {
       index = pskl.utils.Dom.getData(el, 'layerIndex');
       var layer = this.piskelController.getLayerAt(parseInt(index, 10));
@@ -23827,14 +23984,29 @@ return Q;
     }
   };
 
-  ns.LayersListController.prototype.renameCurrentLayer_ = function () {
-    var layer = this.piskelController.getCurrentLayer();
-    var name = window.prompt('Please enter the layer name', layer.getName());
-    if (name) {
-      var index = this.piskelController.getCurrentLayerIndex();
-      this.piskelController.renameLayerAt(index, name);
-      this.renderLayerList_();
+  ns.LayersListController.prototype.startRenamingCurrentLayer_ = function () {
+    this.isRenaming = true;
+    this.renderLayerList_();
+  };
+
+  ns.LayersListController.prototype.onRenameInput_ = function (evt) {
+    var el = evt.target || evt.srcElement;
+    if (evt.key === 'Enter') {
+      this.finishRenamingCurrentLayer_(el, el.value);
+    } else if (!evt.key || evt.key === 'Escape') {
+      this.finishRenamingCurrentLayer_(el);
     }
+  };
+
+  ns.LayersListController.prototype.finishRenamingCurrentLayer_ = function (input, newName) {
+    if (newName) {
+      var index = this.piskelController.getCurrentLayerIndex();
+      this.piskelController.renameLayerAt(index, newName);
+    }
+    input.removeEventListener('blur', this.onRenameInput_);
+    input.removeEventListener('keydown', this.onRenameInput_);
+    this.isRenaming = false;
+    this.renderLayerList_();
   };
 
   ns.LayersListController.prototype.mergeDownCurrentLayer_ = function () {
@@ -23860,7 +24032,7 @@ return Q;
     } else if (action == 'merge') {
       this.mergeDownCurrentLayer_();
     } else if (action == 'edit') {
-      this.renameCurrentLayer_();
+      this.startRenamingCurrentLayer_();
     }
   };
 
@@ -23911,7 +24083,7 @@ return Q;
     pskl.utils.Event.addEventListener(this.popup, 'resize', this.onWindowResize_, this);
     pskl.utils.Event.addEventListener(this.popup, 'unload', this.onPopupClosed_, this);
     var container = this.popup.document.querySelector('.preview-container');
-    this.renderer = new pskl.rendering.frame.BackgroundImageFrameRenderer($(container));
+    this.renderer = new pskl.rendering.frame.BackgroundImageFrameRenderer(container);
     this.updateZoom_();
     this.renderFlag = true;
   };
@@ -23966,25 +24138,18 @@ return Q;
 ;(function () {
   var ns = $.namespace('pskl.controller.preview');
 
-  // Preview is a square of PREVIEW_SIZE x PREVIEW_SIZE
-  var PREVIEW_SIZE = 200;
-  var RENDER_MINIMUM_DELAY = 300;
-
-  ns.PreviewController = function (piskelController, container) {
-    this.piskelController = piskelController;
+  ns.PreviewActionsController = function (previewController, container) {
+    this.previewController = previewController;
+    this.piskelController = previewController.piskelController;
     this.container = container;
 
-    this.elapsedTime = 0;
-    this.currentIndex = 0;
-
     this.onionSkinShortcut = pskl.service.keyboard.Shortcuts.MISC.ONION_SKIN;
-
-    this.lastRenderTime = 0;
-    this.renderFlag = true;
+    this.toggleGridShortcut = pskl.service.keyboard.Shortcuts.MISC.TOGGLE_GRID;
 
     this.fpsRangeInput = document.querySelector('#preview-fps');
     this.fpsCounterDisplay = document.querySelector('#display-fps');
     this.openPopupPreview = document.querySelector('.open-popup-preview-button');
+    this.toggleGridButton = document.querySelector('.toggle-grid-button');
     this.previewSizeDropdown = document.querySelector('.preview-drop-down');
     this.previewSizes = {
       original: {
@@ -24004,23 +24169,20 @@ return Q;
       }
     };
     this.toggleOnionSkinButton = document.querySelector('.preview-toggle-onion-skin');
-
-    this.renderer = new pskl.rendering.frame.BackgroundImageFrameRenderer(this.container);
-    this.popupPreviewController = new ns.PopupPreviewController(piskelController);
   };
 
-  ns.PreviewController.prototype.init = function () {
+  ns.PreviewActionsController.prototype.init = function () {
     this.fpsRangeInput.addEventListener('change', this.onFpsRangeInputUpdate_.bind(this));
     this.fpsRangeInput.addEventListener('input', this.onFpsRangeInputUpdate_.bind(this));
-
-    document.querySelector('.right-column').style.width = Constants.ANIMATED_PREVIEW_WIDTH + 'px';
 
     var addEvent = pskl.utils.Event.addEventListener;
     addEvent(this.toggleOnionSkinButton, 'click', this.toggleOnionSkin_, this);
     addEvent(this.openPopupPreview, 'click', this.onOpenPopupPreviewClick_, this);
+    addEvent(this.toggleGridButton, 'click', this.toggleGrid_, this);
 
     var registerShortcut = pskl.app.shortcutService.registerShortcut.bind(pskl.app.shortcutService);
     registerShortcut(this.onionSkinShortcut, this.toggleOnionSkin_.bind(this));
+    registerShortcut(this.toggleGridShortcut, this.toggleGrid_.bind(this));
 
     var onionSkinTooltip = pskl.utils.TooltipFormatter.format('Toggle onion skin', this.onionSkinShortcut);
     this.toggleOnionSkinButton.setAttribute('title', onionSkinTooltip);
@@ -24035,27 +24197,33 @@ return Q;
       }
     }
 
-    $.subscribe(Events.FRAME_SIZE_CHANGED, this.onFrameSizeChange_.bind(this));
-    $.subscribe(Events.USER_SETTINGS_CHANGED, $.proxy(this.onUserSettingsChange_, this));
-    $.subscribe(Events.PISKEL_SAVE_STATE, this.setRenderFlag_.bind(this, true));
+    $.subscribe(Events.FRAME_SIZE_CHANGED, this.updatePreviewSizeButtons_.bind(this));
+    $.subscribe(Events.USER_SETTINGS_CHANGED, this.onUserSettingsChange_.bind(this));
     $.subscribe(Events.FPS_CHANGED, this.updateFPS_.bind(this));
-    // On PISKEL_RESET, set the render flag and update the FPS input
-    $.subscribe(Events.PISKEL_RESET, this.setRenderFlag_.bind(this, true));
     $.subscribe(Events.PISKEL_RESET, this.updateFPS_.bind(this));
 
     this.updatePreviewSizeButtons_();
-    this.popupPreviewController.init();
-
-    this.updateZoom_();
     this.updateOnionSkinPreview_();
     this.selectPreviewSizeButton_();
     this.updateFPS_();
     this.updateMaxFPS_();
-    this.updateContainerDimensions_();
+    this.updateToggleGridButton_();
   };
 
-  ns.PreviewController.prototype.updatePreviewSizeButtons_ = function () {
-    var fullZoom = this.calculateZoom_();
+  ns.PreviewActionsController.prototype.updateToggleGridButton_ = function () {
+    var gridEnabled = pskl.UserSettings.get(pskl.UserSettings.GRID_ENABLED);
+    this.toggleGridButton.classList.toggle('icon-minimap-grid-white', !gridEnabled);
+    this.toggleGridButton.classList.toggle('icon-minimap-grid-gold', gridEnabled);
+    this.toggleGridButton.classList.toggle('preview-contextual-action-enabled', gridEnabled);
+  };
+
+  ns.PreviewActionsController.prototype.toggleGrid_ = function () {
+    var gridEnabled = pskl.UserSettings.get(pskl.UserSettings.GRID_ENABLED);
+    pskl.UserSettings.set(pskl.UserSettings.GRID_ENABLED, !gridEnabled);
+  };
+
+  ns.PreviewActionsController.prototype.updatePreviewSizeButtons_ = function () {
+    var fullZoom = this.previewController.getZoom();
     var bestZoom = Math.floor(fullZoom);
     var seamlessModeEnabled = pskl.UserSettings.get(pskl.UserSettings.SEAMLESS_MODE);
 
@@ -24106,21 +24274,21 @@ return Q;
     }
   };
 
-  ns.PreviewController.prototype.enablePreviewSizeWidget_ = function () {
+  ns.PreviewActionsController.prototype.enablePreviewSizeWidget_ = function () {
     this.previewSizeDropdown.classList.remove('preview-drop-down-disabled');
   };
 
-  ns.PreviewController.prototype.disablePreviewSizeWidget_ = function (reason) {
+  ns.PreviewActionsController.prototype.disablePreviewSizeWidget_ = function (reason) {
     // The .preview-disable-overlay is displayed on top of the preview size widget
     document.querySelector('.preview-disable-overlay').setAttribute('data-original-title', reason);
     this.previewSizeDropdown.classList.add('preview-drop-down-disabled');
   };
 
-  ns.PreviewController.prototype.onOpenPopupPreviewClick_ = function () {
-    this.popupPreviewController.open();
+  ns.PreviewActionsController.prototype.onOpenPopupPreviewClick_ = function () {
+    this.previewController.openPopupPreview();
   };
 
-  ns.PreviewController.prototype.onChangePreviewSize_ = function (size) {
+  ns.PreviewActionsController.prototype.onChangePreviewSize_ = function (size) {
     var previewSize = this.previewSizes[size];
     var isEnabled = !previewSize.button.classList.contains('preview-contextual-action-hidden');
     if (isEnabled) {
@@ -24128,21 +24296,21 @@ return Q;
     }
   };
 
-  ns.PreviewController.prototype.onUserSettingsChange_ = function (evt, name, value) {
+  ns.PreviewActionsController.prototype.onUserSettingsChange_ = function (evt, name, value) {
     if (name == pskl.UserSettings.ONION_SKIN) {
       this.updateOnionSkinPreview_();
     } else if (name == pskl.UserSettings.MAX_FPS) {
       this.updateMaxFPS_();
     } else if (name === pskl.UserSettings.SEAMLESS_MODE) {
-      this.onFrameSizeChange_();
+      this.updatePreviewSizeButtons_();
+    } else if (name === pskl.UserSettings.GRID_ENABLED) {
+      this.updateToggleGridButton_();
     } else {
-      this.updateZoom_();
       this.selectPreviewSizeButton_();
-      this.updateContainerDimensions_();
     }
   };
 
-  ns.PreviewController.prototype.updateOnionSkinPreview_ = function () {
+  ns.PreviewActionsController.prototype.updateOnionSkinPreview_ = function () {
     var enabledClassname = 'preview-toggle-onion-skin-enabled';
     var isEnabled = pskl.UserSettings.get(pskl.UserSettings.ONION_SKIN);
 
@@ -24154,7 +24322,7 @@ return Q;
     }
   };
 
-  ns.PreviewController.prototype.selectPreviewSizeButton_ = function () {
+  ns.PreviewActionsController.prototype.selectPreviewSizeButton_ = function () {
     var currentlySelected = document.querySelector('.size-button-selected');
     if (currentlySelected) {
       currentlySelected.classList.remove('size-button-selected');
@@ -24165,10 +24333,88 @@ return Q;
     previewSize.button.classList.add('size-button-selected');
   };
 
-  ns.PreviewController.prototype.updateMaxFPS_ = function () {
+  ns.PreviewActionsController.prototype.updateMaxFPS_ = function () {
     var maxFps = pskl.UserSettings.get(pskl.UserSettings.MAX_FPS);
     this.fpsRangeInput.setAttribute('max', maxFps);
     this.piskelController.setFPS(Math.min(maxFps, this.piskelController.getFPS()));
+  };
+
+  /**
+   * Event handler triggered on 'input' or 'change' events.
+   */
+  ns.PreviewActionsController.prototype.onFpsRangeInputUpdate_ = function (evt) {
+    var fps = parseInt(this.fpsRangeInput.value, 10);
+    this.piskelController.setFPS(fps);
+    // blur only on 'change' events, as blurring on 'input' breaks on Firefox
+    if (evt.type === 'change') {
+      this.fpsRangeInput.blur();
+    }
+  };
+
+  ns.PreviewActionsController.prototype.updateFPS_ = function () {
+    var fps = this.piskelController.getFPS();
+    if (fps !== this.fpsRangeInput.value) {
+      // reset
+      this.fpsRangeInput.value = 0;
+      // set proper value
+      this.fpsRangeInput.value = fps;
+      this.fpsCounterDisplay.innerHTML = fps + ' FPS';
+    }
+  };
+
+  ns.PreviewActionsController.prototype.toggleOnionSkin_ = function () {
+    var currentValue = pskl.UserSettings.get(pskl.UserSettings.ONION_SKIN);
+    pskl.UserSettings.set(pskl.UserSettings.ONION_SKIN, !currentValue);
+  };
+})();
+;(function () {
+  var ns = $.namespace('pskl.controller.preview');
+
+  // Preview is a square of PREVIEW_SIZE x PREVIEW_SIZE
+  var PREVIEW_SIZE = 200;
+  var RENDER_MINIMUM_DELAY = 300;
+
+  ns.PreviewController = function (piskelController, container) {
+    this.piskelController = piskelController;
+    this.container = container;
+
+    this.elapsedTime = 0;
+    this.currentIndex = 0;
+    this.lastRenderTime = 0;
+    this.renderFlag = true;
+
+    this.renderer = new pskl.rendering.frame.BackgroundImageFrameRenderer(this.container);
+    this.popupPreviewController = new ns.PopupPreviewController(piskelController);
+    this.previewActionsController = new ns.PreviewActionsController(this, container);
+  };
+
+  ns.PreviewController.prototype.init = function () {
+    var width = Constants.ANIMATED_PREVIEW_WIDTH + Constants.RIGHT_COLUMN_PADDING_LEFT;
+    document.querySelector('.right-column').style.width = width + 'px';
+
+    $.subscribe(Events.FRAME_SIZE_CHANGED, this.onFrameSizeChange_.bind(this));
+    $.subscribe(Events.USER_SETTINGS_CHANGED, this.onUserSettingsChange_.bind(this));
+    $.subscribe(Events.PISKEL_SAVE_STATE, this.setRenderFlag_.bind(this, true));
+    $.subscribe(Events.PISKEL_RESET, this.setRenderFlag_.bind(this, true));
+
+    this.popupPreviewController.init();
+    this.previewActionsController.init();
+
+    this.updateZoom_();
+    this.updateContainerDimensions_();
+  };
+
+  ns.PreviewController.prototype.openPopupPreview = function () {
+    this.popupPreviewController.open();
+  };
+
+  ns.PreviewController.prototype.onUserSettingsChange_ = function (evt, name, value) {
+    if (name === pskl.UserSettings.SEAMLESS_MODE) {
+      this.onFrameSizeChange_();
+    } else {
+      this.updateZoom_();
+      this.updateContainerDimensions_();
+    }
   };
 
   ns.PreviewController.prototype.updateZoom_ = function () {
@@ -24192,38 +24438,14 @@ return Q;
   };
 
   ns.PreviewController.prototype.getCoordinates = function(x, y) {
-    var containerOffset = this.container.offset();
-    x = x - containerOffset.left;
-    y = y - containerOffset.top;
+    var containerRect = this.container.getBoundingClientRect();
+    x = x - containerRect.left;
+    y = y - containerRect.top;
     var zoom = this.getZoom();
     return {
       x : Math.floor(x / zoom),
       y : Math.floor(y / zoom)
     };
-  };
-
-  /**
-   * Event handler triggered on 'input' or 'change' events.
-   */
-  ns.PreviewController.prototype.onFpsRangeInputUpdate_ = function (evt) {
-    var fps = parseInt(this.fpsRangeInput.value, 10);
-    this.piskelController.setFPS(fps);
-    // blur only on 'change' events, as blurring on 'input' breaks on Firefox
-    if (evt.type === 'change') {
-      this.fpsRangeInput.blur();
-    }
-  };
-
-  ns.PreviewController.prototype.updateFPS_ = function () {
-    var fps = this.piskelController.getFPS();
-    if (fps !== this.fps) {
-      this.fps = fps;
-      // reset
-      this.fpsRangeInput.value = 0;
-      // set proper value
-      this.fpsRangeInput.value = this.fps;
-      this.fpsCounterDisplay.innerHTML = this.fps + ' FPS';
-    }
   };
 
   ns.PreviewController.prototype.render = function (delta) {
@@ -24241,15 +24463,18 @@ return Q;
   };
 
   ns.PreviewController.prototype.getNextIndex_ = function (delta) {
-    if (this.fps === 0) {
+    var fps = this.piskelController.getFPS();
+    if (fps === 0) {
       return this.piskelController.getCurrentFrameIndex();
     } else {
-      var index = Math.floor(this.elapsedTime / (1000 / this.fps));
-      if (!this.piskelController.hasFrameAt(index)) {
+      var index = Math.floor(this.elapsedTime / (1000 / fps));
+      var frameIndexes = this.piskelController.getVisibleFrameIndexes();
+      if (frameIndexes.length <= index) {
         this.elapsedTime = 0;
-        index = 0;
+        index = (frameIndexes.length) ? frameIndexes[0] : this.piskelController.getCurrentFrameIndex();
+        return index;
       }
-      return index;
+      return frameIndexes[index];
     }
   };
 
@@ -24267,7 +24492,6 @@ return Q;
   ns.PreviewController.prototype.onFrameSizeChange_ = function () {
     this.updateZoom_();
     this.updateContainerDimensions_();
-    this.updatePreviewSizeButtons_();
   };
 
   ns.PreviewController.prototype.updateContainerDimensions_ = function () {
@@ -24287,7 +24511,7 @@ return Q;
       width = frame.getWidth() * zoom;
     }
 
-    var containerEl = this.container.get(0);
+    var containerEl = this.container;
     containerEl.style.height = height + 'px';
     containerEl.style.width = width + 'px';
 
@@ -24308,11 +24532,6 @@ return Q;
     return (this.renderFlag || this.popupPreviewController.renderFlag) &&
             (Date.now() - this.lastRenderTime > RENDER_MINIMUM_DELAY);
   };
-
-  ns.PreviewController.prototype.toggleOnionSkin_ = function () {
-    var currentValue = pskl.UserSettings.get(pskl.UserSettings.ONION_SKIN);
-    pskl.UserSettings.set(pskl.UserSettings.ONION_SKIN, !currentValue);
-  };
 })();
 ;(function () {
   var ns = $.namespace('pskl.controller');
@@ -24332,14 +24551,14 @@ return Q;
     this.minimapEl = document.createElement('DIV');
     this.minimapEl.className = 'minimap-crop-frame';
     this.minimapEl.style.display = 'none';
-    $(this.container).append(this.minimapEl);
+    this.container.appendChild(this.minimapEl);
 
     // Init mouse events
-    $(this.container).mousedown(this.onMinimapMousedown_.bind(this));
-    $('body').mousemove(this.onMinimapMousemove_.bind(this));
-    $('body').mouseup(this.onMinimapMouseup_.bind(this));
+    this.container.addEventListener('mousedown', this.onMinimapMousedown_.bind(this));
+    document.body.addEventListener('mousemove', this.onMinimapMousemove_.bind(this));
+    document.body.addEventListener('mouseup', this.onMinimapMouseup_.bind(this));
 
-    $.subscribe(Events.ZOOM_CHANGED, $.proxy(this.renderMinimap_, this));
+    $.subscribe(Events.ZOOM_CHANGED, this.renderMinimap_.bind(this));
   };
 
   ns.MinimapController.prototype.renderMinimap_ = function () {
@@ -24356,8 +24575,9 @@ return Q;
     var minimapSize = this.getMinimapSize_();
     var previewSize = this.getPreviewSize_();
 
-    var containerHeight = this.container.height();
-    var containerWidth = this.container.width();
+    var containerRect = this.container.getBoundingClientRect();
+    var containerHeight = containerRect.height;
+    var containerWidth = containerRect.width;
 
     // offset(x, y) in frame pixels
     var offset = this.drawingController.getRenderer().getOffset();
@@ -24376,7 +24596,7 @@ return Q;
     this.minimapEl.style.display = 'block';
     this.minimapEl.style.width = Math.min(minimapSize.width, containerWidth) + 'px';
     this.minimapEl.style.height = Math.min(minimapSize.height, containerHeight) + 'px';
-    this.minimapEl.style.left = Math.max(0, left) +  'px';
+    this.minimapEl.style.left = (Math.max(0, left) + Constants.RIGHT_COLUMN_PADDING_LEFT) +  'px';
     this.minimapEl.style.top = Math.max(0, top) +  'px';
 
     this.isVisible = true;
@@ -24499,7 +24719,8 @@ return Q;
     // Set SimplePen as default selected tool:
     this.selectTool_(this.tools[0]);
     // Activate listener on tool panel:
-    $('#tool-section').mousedown($.proxy(this.onToolIconClicked_, this));
+    var toolSection = document.querySelector('#tool-section');
+    toolSection.addEventListener('mousedown', this.onToolIconClicked_.bind(this));
 
     $.subscribe(Events.SELECT_TOOL, this.onSelectToolEvent_.bind(this));
     $.subscribe(Events.SHORTCUTS_CHANGED, this.createToolsDom_.bind(this));
@@ -24509,14 +24730,14 @@ return Q;
    * @private
    */
   ns.ToolController.prototype.activateToolOnStage_ = function(tool) {
-    var stage = $('body');
-    var previousSelectedToolClass = stage.data('selected-tool-class');
+    var stage = document.body;
+    var previousSelectedToolClass = stage.dataset.selectedToolClass;
     if (previousSelectedToolClass) {
-      stage.removeClass(previousSelectedToolClass);
-      stage.removeClass(pskl.tools.drawing.Move.TOOL_ID);
+      stage.classList.remove(previousSelectedToolClass);
+      stage.classList.remove(pskl.tools.drawing.Move.TOOL_ID);
     }
-    stage.addClass(tool.toolId);
-    stage.data('selected-tool-class', tool.toolId);
+    stage.classList.add(tool.toolId);
+    stage.dataset.selectedToolClass = tool.toolId;
   };
 
   ns.ToolController.prototype.onSelectToolEvent_ = function(event, toolId) {
@@ -24533,11 +24754,13 @@ return Q;
     this.currentSelectedTool = tool;
     this.activateToolOnStage_(this.currentSelectedTool);
 
-    var selectedToolElement = $('#tool-section .tool-icon.selected');
-    var toolElement = $('[data-tool-id=' + tool.toolId + ']');
+    var selectedToolElement = document.querySelector('#tool-section .tool-icon.selected');
+    if (selectedToolElement) {
+      selectedToolElement.classList.remove('selected');
+    }
 
-    selectedToolElement.removeClass('selected');
-    toolElement.addClass('selected');
+    var toolElement = document.querySelector('[data-tool-id=' + tool.toolId + ']');
+    toolElement.classList.add('selected');
 
     $.publish(Events.TOOL_SELECTED, [tool]);
   };
@@ -24546,11 +24769,11 @@ return Q;
    * @private
    */
   ns.ToolController.prototype.onToolIconClicked_ = function(evt) {
-    var target = $(evt.target);
-    var clickedTool = target.closest('.tool-icon');
+    var target = evt.target;
+    var clickedTool = pskl.utils.Dom.getParentWithData(target, 'toolId');
 
-    if (clickedTool.length) {
-      var toolId = clickedTool.data().toolId;
+    if (clickedTool) {
+      var toolId = clickedTool.dataset.toolId;
       var tool = this.getToolById_(toolId);
       if (tool) {
         this.selectTool_(tool);
@@ -24580,7 +24803,7 @@ return Q;
       var tool = this.tools[i];
       html += this.toolIconBuilder.createIcon(tool);
     }
-    $('#tools-container').html(html);
+    document.querySelector('#tools-container').innerHTML = html;
   };
 
   ns.ToolController.prototype.addKeyboardShortcuts_ = function () {
@@ -24627,24 +24850,24 @@ return Q;
     // Initialize colorpickers:
     var colorPicker = $('#color-picker');
     colorPicker.spectrum($.extend({color: Constants.DEFAULT_PEN_COLOR}, spectrumCfg));
-    colorPicker.change({isPrimary : true}, $.proxy(this.onPickerChange_, this));
-    this.setTitleOnPicker_(Constants.DEFAULT_PEN_COLOR, colorPicker);
+    colorPicker.change({isPrimary : true}, this.onPickerChange_.bind(this));
+    this.setTitleOnPicker_(Constants.DEFAULT_PEN_COLOR, colorPicker.get(0));
 
     var secondaryColorPicker = $('#secondary-color-picker');
     secondaryColorPicker.spectrum($.extend({color: Constants.TRANSPARENT_COLOR}, spectrumCfg));
-    secondaryColorPicker.change({isPrimary : false}, $.proxy(this.onPickerChange_, this));
-    this.setTitleOnPicker_(Constants.TRANSPARENT_COLOR, secondaryColorPicker);
+    secondaryColorPicker.change({isPrimary : false}, this.onPickerChange_.bind(this));
+    this.setTitleOnPicker_(Constants.TRANSPARENT_COLOR, secondaryColorPicker.get(0));
 
-    var swapColorsIcon = $('.swap-colors-button');
-    swapColorsIcon.click(this.swapColors.bind(this));
+    var swapColorsIcon = document.querySelector('.swap-colors-button');
+    swapColorsIcon.addEventListener('click', this.swapColors.bind(this));
   };
 
   /**
    * @private
    */
-  ns.PaletteController.prototype.onPickerChange_ = function(evt, isPrimary) {
-    var inputPicker = $(evt.target);
-    var color = inputPicker.val();
+  ns.PaletteController.prototype.onPickerChange_ = function(evt) {
+    var inputPicker = evt.target;
+    var color = inputPicker.value;
 
     if (color != Constants.TRANSPARENT_COLOR) {
       // Unless the color is TRANSPARENT_COLOR, format it to hexstring, as
@@ -24663,7 +24886,6 @@ return Q;
    * @private
    */
   ns.PaletteController.prototype.onColorSelected_ = function(args, evt, color) {
-    var inputPicker = $(evt.target);
     if (args.isPrimary) {
       this.setPrimaryColor_(color);
     } else {
@@ -24672,12 +24894,12 @@ return Q;
   };
 
   ns.PaletteController.prototype.setPrimaryColor_ = function (color) {
-    this.updateColorPicker_(color, $('#color-picker'));
+    this.updateColorPicker_(color, document.querySelector('#color-picker'));
     $.publish(Events.PRIMARY_COLOR_SELECTED, [color]);
   };
 
   ns.PaletteController.prototype.setSecondaryColor_ = function (color) {
-    this.updateColorPicker_(color, $('#secondary-color-picker'));
+    this.updateColorPicker_(color, document.querySelector('#secondary-color-picker'));
     $.publish(Events.SECONDARY_COLOR_SELECTED, [color]);
   };
 
@@ -24696,6 +24918,7 @@ return Q;
    * @private
    */
   ns.PaletteController.prototype.updateColorPicker_ = function (color, colorPicker) {
+    var jqueryColorPicker = $(colorPicker);
     if (color == Constants.TRANSPARENT_COLOR) {
       // We can set the current palette color to transparent.
       // You can then combine this transparent color with an advanced
@@ -24706,18 +24929,18 @@ return Q;
       // The colorpicker can't be set to a transparent state.
       // We set its background to white and insert the
       // string "TRANSPARENT" to mimic this state:
-      colorPicker.spectrum('set', Constants.TRANSPARENT_COLOR);
-      colorPicker.val(Constants.TRANSPARENT_COLOR);
+      jqueryColorPicker.spectrum('set', Constants.TRANSPARENT_COLOR);
+      colorPicker.value = Constants.TRANSPARENT_COLOR;
     } else {
-      colorPicker.spectrum('set', color);
+      jqueryColorPicker.spectrum('set', color);
     }
     this.setTitleOnPicker_(color, colorPicker);
   };
 
   ns.PaletteController.prototype.setTitleOnPicker_ = function (title, colorPicker) {
-    var parent = colorPicker.parent();
-    title = parent.data('initial-title') + '<br/>' + title;
-    parent.attr('data-original-title', title);
+    var parent = colorPicker.parentNode;
+    title = parent.dataset.initialTitle + '<br/>' + title;
+    parent.dataset.originalTitle = title;
   };
 })();
 ;(function () {
@@ -24751,7 +24974,7 @@ return Q;
     $.subscribe(Events.CURRENT_COLORS_UPDATED, this.fillColorListContainer.bind(this));
     $.subscribe(Events.PRIMARY_COLOR_SELECTED, this.highlightSelectedColors.bind(this));
     $.subscribe(Events.SECONDARY_COLOR_SELECTED, this.highlightSelectedColors.bind(this));
-    $.subscribe(Events.USER_SETTINGS_CHANGED, $.proxy(this.onUserSettingsChange_, this));
+    $.subscribe(Events.USER_SETTINGS_CHANGED, this.onUserSettingsChange_.bind(this));
 
     var shortcuts = pskl.service.keyboard.Shortcuts;
     pskl.app.shortcutService.registerShortcut(shortcuts.COLOR.PREVIOUS_COLOR, this.selectPreviousColor_.bind(this));
@@ -24972,9 +25195,9 @@ return Q;
   };
 
   ns.ProgressBarController.prototype.init = function () {
-    $.subscribe(Events.SHOW_PROGRESS, $.proxy(this.showProgress_, this));
-    $.subscribe(Events.UPDATE_PROGRESS, $.proxy(this.updateProgress_, this));
-    $.subscribe(Events.HIDE_PROGRESS, $.proxy(this.hideProgress_, this));
+    $.subscribe(Events.SHOW_PROGRESS, this.showProgress_.bind(this));
+    $.subscribe(Events.UPDATE_PROGRESS, this.updateProgress_.bind(this));
+    $.subscribe(Events.HIDE_PROGRESS, this.hideProgress_.bind(this));
   };
 
   ns.ProgressBarController.prototype.showProgress_ = function (event, progressInfo) {
@@ -25030,8 +25253,8 @@ return Q;
    * @public
    */
   ns.NotificationController.prototype.init = function() {
-    $.subscribe(Events.SHOW_NOTIFICATION, $.proxy(this.displayMessage_, this));
-    $.subscribe(Events.HIDE_NOTIFICATION, $.proxy(this.removeMessage_, this));
+    $.subscribe(Events.SHOW_NOTIFICATION, this.displayMessage_.bind(this));
+    $.subscribe(Events.HIDE_NOTIFICATION, this.removeMessage_.bind(this));
   };
 
   /**
@@ -25058,9 +25281,9 @@ return Q;
    * @private
    */
   ns.NotificationController.prototype.removeMessage_ = function (evt) {
-    var message = $('#user-message');
-    if (message.length) {
-      message.remove();
+    var message = document.querySelector('#user-message');
+    if (message) {
+      message.parentNode.removeChild(message);
     }
   };
 })();
@@ -25742,7 +25965,10 @@ return Q;
     var downloadButton = document.querySelector('.png-download-button');
     var downloadPixiButton = document.querySelector('.png-pixi-download-button');
     var dataUriButton = document.querySelector('.datauri-open-button');
+    var selectedFrameDownloadButton = document.querySelector('.selected-frame-download-button');
     var downloadCssButton = document.querySelector('.css-download-button');
+
+    this.pixiInlineImageCheckbox = document.querySelector('.png-pixi-inline-image-checkbox');
 
     this.initLayoutSection_();
     this.updateDimensionLabel_();
@@ -25752,6 +25978,7 @@ return Q;
     this.addEventListener(downloadCssButton, 'click', this.onDownloadCssClick_);
     this.addEventListener(downloadPixiButton, 'click', this.onPixiDownloadClick_);
     this.addEventListener(dataUriButton, 'click', this.onDataUriClick_);
+    this.addEventListener(selectedFrameDownloadButton, 'click', this.onDownloadSelectedFrameClick_);
     $.subscribe(Events.EXPORT_SCALE_CHANGED, this.onScaleChanged_);
   };
 
@@ -25862,9 +26089,9 @@ return Q;
   };
 
   // Used and overridden in casper integration tests.
-  ns.PngExportController.prototype.downloadCanvas_ = function (canvas) {
+  ns.PngExportController.prototype.downloadCanvas_ = function (canvas, name) {
     // Generate file name
-    var name = this.piskelController.getPiskel().getDescriptor().name;
+    name = name || this.piskelController.getPiskel().getDescriptor().name;
     var fileName = name + '.png';
 
     // Transform to blob and start download.
@@ -25880,7 +26107,15 @@ return Q;
     var canvas = this.createPngSpritesheet_();
     var name = this.piskelController.getPiskel().getDescriptor().name;
 
-    zip.file(name + '.png', pskl.utils.CanvasUtils.getBase64FromCanvas(canvas) + '\n', {base64: true});
+    var image;
+
+    if (this.pixiInlineImageCheckbox.checked) {
+      image = canvas.toDataURL('image/png');
+    } else {
+      image = name + '.png';
+
+      zip.file(image, pskl.utils.CanvasUtils.getBase64FromCanvas(canvas) + '\n', {base64: true});
+    }
 
     var width = canvas.width / this.getColumns_();
     var height = canvas.height / this.getRows_();
@@ -25905,7 +26140,7 @@ return Q;
       'meta': {
         'app': 'https://github.com/piskelapp/piskel/',
         'version': '1.0',
-        'image': name + '.png',
+        'image': image,
         'format': 'RGBA8888',
         'size': {'w': canvas.width,'h': canvas.height}
       }
@@ -25929,6 +26164,19 @@ return Q;
       popup.document.title = dataUri;
       popup.document.body.innerHTML = html;
     }.bind(this), 500);
+  };
+
+  ns.PngExportController.prototype.onDownloadSelectedFrameClick_ = function (evt) {
+    var frameIndex = this.piskelController.getCurrentFrameIndex();
+    var name = this.piskelController.getPiskel().getDescriptor().name;
+    var canvas = this.piskelController.renderFrameAt(frameIndex, true);
+    var zoom = this.exportController.getExportZoom();
+    if (zoom != 1) {
+      canvas = pskl.utils.ImageResizer.resize(canvas, canvas.width * zoom, canvas.height * zoom, false);
+    }
+
+    var fileName = name + '-' + (frameIndex + 1) + '.png';
+    this.downloadCanvas_(canvas, fileName);
   };
 
   ns.PngExportController.prototype.onDownloadCssClick_ = function (evt) {
@@ -25990,10 +26238,23 @@ return Q;
     this.pngFilePrefixInput = document.querySelector('.zip-prefix-name');
     this.pngFilePrefixInput.value = 'sprite_';
 
-    this.splitByLayersCheckbox =  document.querySelector('.zip-split-layers-checkbox');
+    this.splitByLayersCheckbox = document.querySelector('.zip-split-layers-checkbox');
+    this.addEventListener(this.splitByLayersCheckbox, 'change', this.onSplitLayersClick_);
+
+    this.useLayerNamesContainer = document.querySelector('.use-layer-names-container');
+    this.useLayerNamesCheckbox = document.querySelector('.zip-use-layer-names-checkbox');
+    this.toggleHideUseLayerNamesCheckbox();
 
     var zipButton = document.querySelector('.zip-generate-button');
     this.addEventListener(zipButton, 'click', this.onZipButtonClick_);
+  };
+
+  ns.ZipExportController.prototype.toggleHideUseLayerNamesCheckbox = function () {
+    this.useLayerNamesContainer.style.display = (this.splitByLayersCheckbox.checked ? 'block' : 'none');
+  };
+
+  ns.ZipExportController.prototype.onSplitLayersClick_ = function () {
+    this.toggleHideUseLayerNamesCheckbox();
   };
 
   ns.ZipExportController.prototype.onZipButtonClick_ = function () {
@@ -26041,6 +26302,9 @@ return Q;
         var basename = this.pngFilePrefixInput.value;
         var frameid = pskl.utils.StringUtils.leftPad(i + 1, framePaddingLength, '0');
         var filename = 'l' + layerid + '_' + basename + frameid + '.png';
+        if (this.useLayerNamesCheckbox.checked) {
+          filename = layer.getName() + '_' + basename + frameid + '.png';
+        }
         zip.file(filename, pskl.utils.CanvasUtils.getBase64FromCanvas(canvas) + '\n', {base64: true});
       }
     }
@@ -26064,9 +26328,6 @@ return Q;
   ns.MiscExportController.prototype.init = function () {
     var cDownloadButton = document.querySelector('.c-download-button');
     this.addEventListener(cDownloadButton, 'click', this.onDownloadCFileClick_);
-
-    var selectedFrameDownloadButton = document.querySelector('.selected-frame-download-button');
-    this.addEventListener(selectedFrameDownloadButton, 'click', this.onDownloadSelectedFrameClick_);
   };
 
   ns.MiscExportController.prototype.onDownloadCFileClick_ = function (evt) {
@@ -26127,16 +26388,6 @@ return Q;
     hexStr += ('00' + g.toString(16)).substr(-2);
     hexStr += ('00' + r.toString(16)).substr(-2);
     return hexStr;
-  };
-
-  ns.MiscExportController.prototype.onDownloadSelectedFrameClick_ = function (evt) {
-    var frameIndex = this.piskelController.getCurrentFrameIndex();
-    var fileName = this.getPiskelName_() + '-' + (frameIndex + 1) + '.png';
-    var canvas = this.piskelController.renderFrameAt(frameIndex, true);
-
-    pskl.utils.BlobUtils.canvasToBlob(canvas, function(blob) {
-      pskl.utils.FileUtils.downloadAsFile(blob, fileName);
-    });
   };
 })();
 ;(function () {
@@ -26981,12 +27232,11 @@ return Q;
     this.localStorageItemTemplate_ = pskl.utils.Template.get('local-storage-item-template');
 
     this.service_ = pskl.app.indexedDbStorageService;
-    this.piskelList = $('.local-piskel-list');
-    this.prevSessionContainer = $('.previous-session');
+    this.piskelList = document.querySelector('.local-piskel-list');
 
     this.fillLocalPiskelsList_();
 
-    this.piskelList.click(this.onPiskelsListClick_.bind(this));
+    this.piskelList.addEventListener('click', this.onPiskelsListClick_.bind(this));
   };
 
   ns.BrowseLocalController.prototype.onPiskelsListClick_ = function (evt) {
@@ -27022,7 +27272,7 @@ return Q;
         });
       }).bind(this));
 
-      var tableBody_ = this.piskelList.get(0).tBodies[0];
+      var tableBody_ = this.piskelList.tBodies[0];
       tableBody_.innerHTML = html;
     }.bind(this));
   };
@@ -28678,7 +28928,8 @@ return Q;
     var colorElement = drop.item.get(0);
 
     var oldIndex = parseInt(colorElement.dataset.paletteIndex, 10);
-    var newIndex = $('.create-palette-color').index(drop.item);
+    var colors = document.querySelectorAll('.create-palette-color');
+    var newIndex = Array.prototype.indexOf.call(colors, colorElement);
     this.palette.move(oldIndex, newIndex);
 
     this.selectedIndex = newIndex;
@@ -31111,6 +31362,7 @@ return Q;
       BEST_PREVIEW : createShortcut('best-preview', 'Select best size preview', 'alt+2'),
       FULL_PREVIEW : createShortcut('full-preview', 'Select full size preview', 'alt+3'),
       ONION_SKIN : createShortcut('onion-skin', 'Toggle onion skin', 'alt+O'),
+      TOGGLE_GRID : createShortcut('toggle-grid', 'Show/Hide grid', 'alt+G'),
       LAYER_PREVIEW : createShortcut('layer-preview', 'Toggle layer preview', 'alt+L'),
       MERGE_ANIMATION : createShortcut('import-animation', 'Open merge animation popup', 'ctrl+shift+M'),
       CLOSE_POPUP : createShortcut('close-popup', 'Close an opened popup', 'ESC'),
@@ -31154,7 +31406,7 @@ return Q;
    * @public
    */
   ns.ShortcutService.prototype.init = function() {
-    $(document.body).keydown($.proxy(this.onKeyDown_, this));
+    document.body.addEventListener('keydown', this.onKeyDown_.bind(this));
   };
 
   /**
@@ -32810,7 +33062,6 @@ ns.ToolsHelper = {
 
   ns.BaseSelect = function() {
     this.secondaryToolId = pskl.tools.drawing.Move.TOOL_ID;
-    this.bodyRoot = $('body');
 
     // Select's first point coordinates (set in applyToolAt)
     this.startCol = null;
@@ -32845,7 +33096,7 @@ ns.ToolsHelper = {
     this.lastMoveRow = row;
 
     // The select tool can be in two different state.
-    // If the inital click of the tool is not on a selection, we go in 'select'
+    // If the initial click of the tool is not on a selection, we go in 'select'
     // mode to create a selection.
     // If the initial click is on a previous selection, we go in 'moveSelection'
     // mode to allow to move the selection by drag'n dropping it.
@@ -32894,12 +33145,12 @@ ns.ToolsHelper = {
     if (overlay.containsPixel(col, row)) {
       if (this.isInSelection(col, row)) {
         // We're hovering the selection, show the move tool:
-        this.bodyRoot.addClass(this.secondaryToolId);
-        this.bodyRoot.removeClass(this.toolId);
+        document.body.classList.add(this.secondaryToolId);
+        document.body.classList.remove(this.toolId);
       } else {
         // We're not hovering the selection, show create selection tool:
-        this.bodyRoot.addClass(this.toolId);
-        this.bodyRoot.removeClass(this.secondaryToolId);
+        document.body.classList.add(this.toolId);
+        document.body.classList.remove(this.secondaryToolId);
       }
     }
 
@@ -33167,8 +33418,8 @@ ns.ToolsHelper = {
 
   /**
    * When creating the rectangle selection, we clear the current overlayFrame and
-   * redraw the current rectangle based on the orgin coordinate and
-   * the current mouse coordiinate in sprite.
+   * redraw the current rectangle based on the origin coordinate and
+   * the current mouse coordinate in sprite.
    * @override
    */
   ns.RectangleSelect.prototype.onDragSelect_ = function (col, row, frame, overlay) {
@@ -33205,7 +33456,7 @@ ns.ToolsHelper = {
 
   /**
    * For the shape select tool, you just need to click one time to create a selection.
-   * So we jsut need to implement onSelectStart_ (no need for onSelect_ & onSelectEnd_)
+   * So we just need to implement onSelectStart_ (no need for onSelect_ & onSelectEnd_)
    * @override
    */
   ns.ShapeSelect.prototype.onSelectStart_ = function (col, row, frame, overlay) {
@@ -34086,9 +34337,6 @@ ns.ToolsHelper = {
   ns.app = {
 
     init : function () {
-      // Run preferences migration scripts for version v0.12.0
-      pskl.UserSettings.migrate_to_v0_12();
-
       /**
        * When started from APP Engine, appEngineToken_ (Boolean) should be set on window.pskl
        */
@@ -34143,24 +34391,24 @@ ns.ToolsHelper = {
 
       this.drawingController = new pskl.controller.DrawingController(
         this.piskelController,
-        $('#drawing-canvas-container'));
+        document.querySelector('#drawing-canvas-container'));
       this.drawingController.init();
 
       this.previewController = new pskl.controller.preview.PreviewController(
         this.piskelController,
-        $('#animated-preview-canvas-container'));
+        document.querySelector('#animated-preview-canvas-container'));
       this.previewController.init();
 
       this.minimapController = new pskl.controller.MinimapController(
         this.piskelController,
         this.previewController,
         this.drawingController,
-        $('.minimap-container'));
+        document.querySelector('.minimap-container'));
       this.minimapController.init();
 
       this.framesListController = new pskl.controller.FramesListController(
         this.piskelController,
-        $('#preview-list-wrapper').get(0));
+        document.querySelector('#preview-list-wrapper'));
       this.framesListController.init();
 
       this.layersListController = new pskl.controller.LayersListController(this.piskelController);
